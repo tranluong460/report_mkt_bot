@@ -112,8 +112,8 @@ def webhook_handler():
         )
         return jsonify({"ok": True})
 
-    # @all - tag tất cả người đã follow
-    if "@all" in text:
+    # /all - tag tất cả người đã follow
+    if text.strip() in ("/all", "/all@report_mkt_bot"):
         members = kv_get()
         if not members:
             send_telegram_message(
