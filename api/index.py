@@ -88,20 +88,8 @@ def webhook_handler():
     first_name = user.get("first_name", "")
     username = user.get("username", "")
 
-    # /follow - đăng ký nhận tag
-    if text.strip() == "/follow":
-        members = kv_get()
-        members[user_id] = {"first_name": first_name, "username": username}
-        kv_set(members)
-        send_telegram_message(
-            chat_id,
-            f"*{first_name}* đã đăng ký nhận thông báo!",
-            thread_id,
-        )
-        return jsonify({"ok": True})
-
-    # /unfollow - hủy đăng ký
-    if text.strip() == "/unfollow":
+    # /unfollow - hủy đăng ký (check trước /follow)
+    if text.strip().startswith("/unfollow"):
         members = kv_get()
         if user_id in members:
             del members[user_id]
@@ -113,8 +101,20 @@ def webhook_handler():
         )
         return jsonify({"ok": True})
 
+    # /follow - đăng ký nhận tag
+    if text.strip().startswith("/follow"):
+        members = kv_get()
+        members[user_id] = {"first_name": first_name, "username": username}
+        kv_set(members)
+        send_telegram_message(
+            chat_id,
+            f"*{first_name}* đã đăng ký nhận thông báo!",
+            thread_id,
+        )
+        return jsonify({"ok": True})
+
     # /all - tag tất cả người đã follow
-    if text.strip() in ("/all", "/all@report_mkt_bot"):
+    if text.strip().startswith("/all"):
         members = kv_get()
         if not members:
             send_telegram_message(
