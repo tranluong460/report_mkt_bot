@@ -1,6 +1,7 @@
 import os
 import json
 import httpx
+import redis
 from flask import Flask, jsonify, request
 from datetime import datetime, timezone, timedelta
 
@@ -11,32 +12,28 @@ GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID")
 TOPIC_ID = os.environ.get("TOPIC_ID")
 
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
-KV_REST_API_URL = os.environ.get("KV_REST_API_URL")
-KV_REST_API_TOKEN = os.environ.get("KV_REST_API_TOKEN")
+
+KV_REDIS_URL = os.environ.get("KV_REDIS_URL")
+db = redis.from_url(KV_REDIS_URL) if KV_REDIS_URL else None
 
 VN_TZ = timezone(timedelta(hours=7))
 KV_KEY = "members"
 
 
-# --- Vercel KV helpers ---
+# --- Redis helpers ---
 
 def kv_get():
-    resp = httpx.get(
-        f"{KV_REST_API_URL}/get/{KV_KEY}",
-        headers={"Authorization": f"Bearer {KV_REST_API_TOKEN}"},
-    )
-    data = resp.json().get("result")
+    if not db:
+        return {}
+    data = db.get(KV_KEY)
     if data:
         return json.loads(data)
     return {}
 
 
 def kv_set(members):
-    httpx.post(
-        f"{KV_REST_API_URL}/set/{KV_KEY}",
-        headers={"Authorization": f"Bearer {KV_REST_API_TOKEN}"},
-        json=[KV_KEY, json.dumps(members)],
-    )
+    if db:
+        db.set(KV_KEY, json.dumps(members))
 
 
 # --- Telegram helpers ---
