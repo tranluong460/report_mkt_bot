@@ -78,6 +78,7 @@ def cron_handler():
 @app.route("/api/index", methods=["POST"])
 def webhook_handler():
     data = request.get_json()
+    print("WEBHOOK DATA:", json.dumps(data, ensure_ascii=False))
     message = data.get("message", {})
     text = message.get("text", "")
     chat_id = message.get("chat", {}).get("id")
