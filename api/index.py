@@ -38,11 +38,11 @@ def kv_set(members):
 
 # --- Telegram helpers ---
 
-def send_telegram_message(chat_id, text, thread_id=None):
+def send_telegram_message(chat_id, text, thread_id=None, parse_mode="Markdown"):
     payload = {
         "chat_id": chat_id,
         "text": text,
-        "parse_mode": "Markdown",
+        "parse_mode": parse_mode,
     }
     if thread_id:
         payload["message_thread_id"] = thread_id
@@ -78,7 +78,6 @@ def cron_handler():
 @app.route("/api/index", methods=["POST"])
 def webhook_handler():
     data = request.get_json()
-    print("WEBHOOK DATA:", json.dumps(data, ensure_ascii=False))
     message = data.get("message", {})
     text = message.get("text", "")
     chat_id = message.get("chat", {}).get("id")
@@ -113,8 +112,11 @@ def webhook_handler():
         )
         return jsonify({"ok": True})
 
-    # /all - tag tất cả người đã follow
+    # /all <nội dung> - gửi nội dung kèm tag tất cả người đã follow
     if text.strip().startswith("/all"):
+        content = text.strip()[4:].strip()
+        if not content:
+            content = text.strip().replace("/all@report_mkt_bot", "").strip()
         members = kv_get()
         if not members:
             send_telegram_message(
@@ -123,16 +125,23 @@ def webhook_handler():
                 thread_id,
             )
         else:
-            mentions = []
-            for uid, info in members.items():
-                if info.get("username"):
-                    mentions.append(f"@{info['username']}")
-                else:
-                    mentions.append(info.get("first_name", uid))
+            # Mention ẩn bằng zero-width space
+            mentions = "".join(
+                f'<a href="tg://user?id={uid}">\u200b</a>'
+                for uid in members
+            )
+            original_text = text.strip()
+            msg = f"{original_text}\n{mentions}"
+            # Xóa tin nhắn gốc
+            httpx.post(
+                f"{TELEGRAM_API}/deleteMessage",
+                json={"chat_id": chat_id, "message_id": message.get("message_id")},
+            )
             send_telegram_message(
                 chat_id,
-                f"\U0001F4E2 {' '.join(mentions)}",
+                msg,
                 thread_id,
+                parse_mode="HTML",
             )
         return jsonify({"ok": True})
 
