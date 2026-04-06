@@ -1,6 +1,9 @@
 import os
 import httpx
+from flask import Flask, jsonify, request
 from datetime import datetime, timezone, timedelta
+
+app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID")
@@ -32,14 +35,13 @@ def send_message():
     return response.json()
 
 
-def handler(request):
-    """Vercel serverless function handler."""
+@app.route("/api/index", methods=["GET"])
+def handler():
     auth = request.headers.get("Authorization")
     cron_secret = os.environ.get("CRON_SECRET")
 
     if cron_secret and auth != f"Bearer {cron_secret}":
-        return {"statusCode": 401, "body": "Unauthorized"}
+        return jsonify({"error": "Unauthorized"}), 401
 
     result = send_message()
-
-    return {"statusCode": 200, "body": result}
+    return jsonify(result)
