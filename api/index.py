@@ -154,6 +154,18 @@ def build_summary_message(reports):
 
 # --- Telegram helpers ---
 
+def react_to_message(chat_id, message_id, emoji):
+    """React to a message with an emoji reaction."""
+    httpx.post(
+        f"{TELEGRAM_API}/setMessageReaction",
+        json={
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "reaction": [{"type": "emoji", "emoji": emoji}],
+        },
+    )
+
+
 def send_telegram_message(chat_id, text, thread_id=None, parse_mode="Markdown"):
     payload = {
         "chat_id": chat_id,
@@ -218,15 +230,19 @@ def webhook_handler():
     first_name = user.get("first_name", "")
     username = user.get("username", "")
 
+    message_id = message.get("message_id")
+
     # Auto-save report when a user posts to the report topic
-    if (
-        thread_id
-        and str(thread_id) == str(TOPIC_ID)
-        and text.strip().lower().startswith("date:")
-    ):
-        report = parse_report(text)
-        report["reporter"] = first_name
-        save_report(user_id, report)
+    if thread_id and str(thread_id) == str(TOPIC_ID):
+        if text.strip().lower().startswith("date:"):
+            report = parse_report(text)
+            if report["date"] and report["name"] and report["projects"]:
+                report["reporter"] = first_name
+                save_report(user_id, report)
+                react_to_message(chat_id, message_id, "✅")
+            else:
+                # Has "date:" but missing name or projects
+                react_to_message(chat_id, message_id, "❌")
 
     # /debug - kiểm tra trạng thái Redis và báo cáo hôm nay
     if text.strip().startswith("/debug"):
