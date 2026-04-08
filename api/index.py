@@ -228,6 +228,25 @@ def webhook_handler():
         report["reporter"] = first_name
         save_report(user_id, report)
 
+    # /debug - kiểm tra trạng thái Redis và báo cáo hôm nay
+    if text.strip().startswith("/debug"):
+        redis_ok = db is not None
+        reports = get_today_reports() if redis_ok else {}
+        today = datetime.now(VN_TZ).strftime("%Y-%m-%d")
+        reporters = [r.get("reporter", uid) for uid, r in reports.items()]
+        lines = [
+            "*🔧 Debug Info*",
+            f"Redis: {'✅ connected' if redis_ok else '❌ not connected (KV_REDIS_URL missing)'}",
+            f"TOPIC\\_ID: `{TOPIC_ID}`",
+            f"BUILD\\_TOPIC\\_ID: `{BUILD_TOPIC_ID}`",
+            f"thread\\_id tin nhắn này: `{thread_id}`",
+            f"Báo cáo ngày {today}: *{len(reports)}* người",
+        ]
+        if reporters:
+            lines.append("Đã nộp: " + ", ".join(reporters))
+        send_telegram_message(chat_id, "\n".join(lines), thread_id)
+        return jsonify({"ok": True})
+
     # /unfollow - hủy đăng ký (check trước /follow)
     if text.strip().startswith("/unfollow"):
         members = kv_get()
