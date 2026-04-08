@@ -239,10 +239,10 @@ def webhook_handler():
             if report["date"] and report["name"] and report["projects"]:
                 report["reporter"] = first_name
                 save_report(user_id, report)
-                react_to_message(chat_id, message_id, "✅")
+                react_to_message(chat_id, message_id, "👍")
             else:
                 # Has "date:" but missing name or projects
-                react_to_message(chat_id, message_id, "❌")
+                react_to_message(chat_id, message_id, "🤔")
 
     # /debug - kiểm tra trạng thái Redis và báo cáo hôm nay
     if text.strip().startswith("/debug"):
