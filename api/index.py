@@ -233,7 +233,7 @@ def webhook_handler():
     message_id = message.get("message_id")
 
     # Auto-save report when a user posts to the report topic
-    if thread_id and str(thread_id) == str(TOPIC_ID):
+    if thread_id and str(thread_id) == str(TOPIC_ID) and text.strip():
         if text.strip().lower().startswith("date:"):
             report = parse_report(text)
             if report["date"] and report["name"] and report["projects"]:
@@ -241,8 +241,10 @@ def webhook_handler():
                 save_report(user_id, report)
                 react_to_message(chat_id, message_id, "👍")
             else:
-                # Has "date:" but missing name or projects
                 react_to_message(chat_id, message_id, "🤔")
+        else:
+            # Any message in report topic that doesn't follow the format
+            react_to_message(chat_id, message_id, "🤔")
 
     # /debug - kiểm tra trạng thái Redis và báo cáo hôm nay
     if text.strip().startswith("/debug"):
