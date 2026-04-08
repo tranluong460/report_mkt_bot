@@ -103,8 +103,9 @@ def parse_report(text):
                 current_project = None
             continue
 
-        if line.startswith("- "):
-            item = line[2:].strip()
+        # Handle both "- item" and "-item" and bare "-"
+        if line.startswith("-"):
+            item = line[1:].strip()
             if not item:
                 continue
             if current_section == "done" and current_project is not None:
