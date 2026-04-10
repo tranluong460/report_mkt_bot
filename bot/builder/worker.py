@@ -145,7 +145,10 @@ class BuildWorker:
 
             # Edit message gốc
             if build_msg_id:
-                edit_message(chat_id, build_msg_id, summary, parse_mode="HTML")
+                edit_result = edit_message(chat_id, build_msg_id, summary, parse_mode="HTML")
+                logger.info(f"Edit build msg result: {edit_result}")
+                if not edit_result.get("ok"):
+                    send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
             else:
                 send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
 
@@ -176,7 +179,10 @@ class BuildWorker:
 
             # Edit message gốc
             if build_msg_id:
-                edit_message(chat_id, build_msg_id, summary, parse_mode="HTML")
+                edit_result = edit_message(chat_id, build_msg_id, summary, parse_mode="HTML")
+                logger.info(f"Edit build msg result: {edit_result}")
+                if not edit_result.get("ok"):
+                    send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
             else:
                 send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
 
