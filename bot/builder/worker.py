@@ -55,6 +55,10 @@ class BuildWorker:
         return None
 
     def _process_job(self, job: BuildJob):
+        import logging
+        logger = logging.getLogger("bot.worker")
+        logger.info(f"Processing job #{job.build_id}, build_msg_id={job.message_id}")
+
         chat_id = int(GROUP_CHAT_ID)
         build_thread_id = int(BUILD_TOPIC_ID) if BUILD_TOPIC_ID else job.thread_id
         log_thread_id = self._get_log_topic_id()
@@ -120,7 +124,8 @@ class BuildWorker:
             send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
 
         # Edit message gốc trong BUILD topic
-        build_msg_id = job.message_id  # message_id từ "đã thêm vào hàng đợi"
+        build_msg_id = job.message_id
+        logger.info(f"Build #{job.build_id} done, build_msg_id={build_msg_id}, success={build_result['success']}")
 
         if build_result["success"]:
             dist = get_dist_files(job.project)
