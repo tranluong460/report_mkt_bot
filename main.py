@@ -13,11 +13,18 @@ from bot.builder.queue import BuildQueue
 from bot.builder.worker import BuildWorker
 from bot.poller import run_polling
 
+import sys
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
+    stream=sys.stdout,
+    force=True,
 )
+sys.stdout.reconfigure(line_buffering=True)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logger = logging.getLogger("bot")
 
 stop_event = threading.Event()

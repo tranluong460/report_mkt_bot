@@ -115,6 +115,9 @@ def execute_build(
                 log_file.write(f"--- OK ({step_duration:.1f}s) ---\n\n")
                 log_file.flush()
 
+                if on_step:
+                    on_step(i, total, label, "done")
+
             except subprocess.TimeoutExpired:
                 log_file.write(f"\n!!! TIMEOUT (30 phút) !!!\n\n")
                 log_file.flush()

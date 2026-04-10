@@ -18,7 +18,7 @@ class BuildJob:
     chat_id: int
     thread_id: int | None
     message_id: int | None = None
-    created_at: str = field(default_factory=lambda: datetime.now(VN_TZ).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(VN_TZ).strftime("%d/%m/%Y %H:%M:%S"))
 
 
 class BuildQueue:

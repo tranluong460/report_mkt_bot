@@ -43,6 +43,7 @@ def handle_update(update: dict, build_queue: BuildQueue) -> None:
         return
 
     cmd = text.strip().split()[0].split("@")[0].lower()
+    logger.info(f"Command: {cmd} | User: {first_name} | Text: {text.strip()[:50]}")
 
     if cmd == "/help":
         handle_help(chat_id, thread_id)
