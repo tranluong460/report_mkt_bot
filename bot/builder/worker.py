@@ -4,7 +4,7 @@ from datetime import datetime
 from html import escape
 
 from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID, BUILD_LOG_DIR
-from bot.telegram import send_telegram_message, edit_message, send_document, send_media_group, edit_message_media, delete_message
+from bot.telegram import send_telegram_message, edit_message, edit_message_caption, send_document, send_media_group, edit_message_media, delete_message
 from bot.store import save_build_record
 from bot.builder.queue import BuildQueue, BuildJob
 from bot.builder.executor import execute_build, get_dist_files, _fmt_duration
@@ -95,7 +95,7 @@ class BuildWorker:
 
             # Edit caption của document message trong LOG topic
             if log_msg_id:
-                edit_message(chat_id, log_msg_id, msg, parse_mode="HTML")
+                edit_message_caption(chat_id, log_msg_id, msg)
             else:
                 result = send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
                 if result.get("ok"):

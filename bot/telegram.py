@@ -44,7 +44,7 @@ def send_telegram_message(
 
 
 def edit_message(chat_id: int, message_id: int, text: str, parse_mode: str = "Markdown") -> dict:
-    """Edit an existing message."""
+    """Edit an existing text message."""
     try:
         response = _client.post(
             f"{TELEGRAM_API}/editMessageText",
@@ -52,6 +52,23 @@ def edit_message(chat_id: int, message_id: int, text: str, parse_mode: str = "Ma
                 "chat_id": chat_id,
                 "message_id": message_id,
                 "text": text,
+                "parse_mode": parse_mode,
+            },
+        )
+        return response.json()
+    except httpx.HTTPError:
+        return {"ok": False}
+
+
+def edit_message_caption(chat_id: int, message_id: int, caption: str, parse_mode: str = "HTML") -> dict:
+    """Edit caption of a document/media message."""
+    try:
+        response = _client.post(
+            f"{TELEGRAM_API}/editMessageCaption",
+            json={
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "caption": caption,
                 "parse_mode": parse_mode,
             },
         )
