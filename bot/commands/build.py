@@ -78,42 +78,40 @@ def handle_build(
         thread_id=thread_id,
     )
 
-    # Gửi media group placeholder (zip + latest.yml) vào BUILD topic
-    # Worker sẽ dùng editMessageMedia để thay file thật
+    # Gửi 2 document riêng lẻ (không media group) để có thể editMessageMedia từng cái
     ensure_log_dir()
     placeholder_zip = os.path.join(BUILD_LOG_DIR, f"{project}.zip")
-    placeholder_yml = os.path.join(BUILD_LOG_DIR, f"latest.yml")
+    placeholder_yml = os.path.join(BUILD_LOG_DIR, "latest.yml")
     with open(placeholder_zip, "w", encoding="utf-8") as f:
         f.write(f"Build #{build_id} - {project} ({branch}) - đang chờ...\n")
     with open(placeholder_yml, "w", encoding="utf-8") as f:
         f.write(f"Build #{build_id} - đang chờ...\n")
 
+    # File 1: zip placeholder
+    r1 = send_document(chat_id, placeholder_zip, thread_id=thread_id)
+    if r1.get("ok"):
+        job.message_id = r1["result"]["message_id"]
+
+    # File 2: yml placeholder + caption
     caption = (
         f"\u23f3 <b>Build #{build_id}</b> đang chờ...\n"
         f"Dự án: <code>{escape(project)}</code>\n"
         f"Branch: <code>{escape(branch)}</code>"
     )
-    result = send_media_group(
-        chat_id, [placeholder_zip, placeholder_yml],
-        caption=caption, thread_id=thread_id,
-    )
-    # sendMediaGroup trả về list messages, lưu cả 2 message_id
-    if result.get("ok") and result.get("result"):
-        messages = result["result"]
-        job.message_id = messages[0]["message_id"]       # zip message
-        job.message_id_2 = messages[1]["message_id"]     # yml message
+    r2 = send_document(chat_id, placeholder_yml, caption=caption,
+                        thread_id=thread_id, parse_mode="HTML")
+    if r2.get("ok"):
+        job.message_id_2 = r2["result"]["message_id"]
 
     # Thêm vào queue
     success, position = build_queue.put(job)
     if not success:
+        from bot.telegram import delete_message, edit_message_media
         if job.message_id:
-            from bot.telegram import edit_message_media, delete_message
-            edit_message_media(chat_id, job.message_id, placeholder_zip,
+            delete_message(chat_id, job.message_id)
+        if job.message_id_2:
+            edit_message_media(chat_id, job.message_id_2, placeholder_yml,
                                "Hàng đợi đầy (tối đa 5). Vui lòng thử lại sau.")
-            if job.message_id_2:
-                delete_message(chat_id, job.message_id_2)
-        else:
-            send_telegram_message(chat_id, "Hàng đợi đầy (tối đa 5). Vui lòng thử lại sau.", thread_id)
 
 
 def handle_cancel(chat_id: int, thread_id, text: str, user_id: str, build_queue: BuildQueue) -> None:

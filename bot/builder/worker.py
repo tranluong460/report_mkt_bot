@@ -141,7 +141,7 @@ class BuildWorker:
             else:
                 send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
 
-        # === BUILD TOPIC (media group: msg1=zip, msg2=yml có caption) ===
+        # === BUILD TOPIC (2 document riêng: msg_zip + msg_yml) ===
         msg_zip = job.message_id      # message_id file zip
         msg_yml = job.message_id_2    # message_id file yml (có caption)
         logger.info(f"Build #{job.build_id} done, msg_zip={msg_zip}, msg_yml={msg_yml}, success={build_result['success']}")
@@ -162,15 +162,15 @@ class BuildWorker:
             if zip_name:
                 caption += f"\nFile: <code>{escape(zip_name)}</code>{zip_size}"
 
-            # Thay placeholder zip bằng zip thật (không caption)
+            # Edit zip placeholder → zip thật
             if msg_zip and dist["zip"]:
                 edit_message_media(chat_id, msg_zip, dist["zip"])
 
-            # Thay placeholder yml bằng latest.yml thật (có caption)
+            # Edit yml placeholder → latest.yml thật + caption
             if msg_yml and dist["latest"]:
                 edit_message_media(chat_id, msg_yml, dist["latest"], caption)
             elif msg_yml:
-                edit_message_media(chat_id, msg_yml, dist["latest"] or build_result["log_path"], caption)
+                edit_message(chat_id, msg_yml, caption, parse_mode="HTML")
 
         else:
             err = escape(build_result["error"] or "Lỗi không xác định")
@@ -180,13 +180,15 @@ class BuildWorker:
                 f"Bởi: {escape(job.user_name)} | Lỗi: {err}"
             )
 
-            # Thay placeholder zip bằng file log (không caption)
-            if msg_zip and build_result["log_path"]:
-                edit_message_media(chat_id, msg_zip, build_result["log_path"])
+            # Xoá zip placeholder
+            if msg_zip:
+                delete_message(chat_id, msg_zip)
 
-            # Xoá placeholder yml, không cần nữa
-            if msg_yml:
-                delete_message(chat_id, msg_yml)
+            # Edit yml placeholder → log file + caption lỗi
+            if msg_yml and build_result["log_path"]:
+                edit_message_media(chat_id, msg_yml, build_result["log_path"], caption)
+            elif msg_yml:
+                edit_message(chat_id, msg_yml, caption, parse_mode="HTML")
 
 
     def _build_progress_msg(self, job, step_status, current, total, start_time):
