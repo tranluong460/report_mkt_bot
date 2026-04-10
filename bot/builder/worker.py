@@ -1,3 +1,4 @@
+import os
 import threading
 from datetime import datetime
 from html import escape
@@ -6,7 +7,7 @@ from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID
 from bot.telegram import send_telegram_message, edit_message, send_document
 from bot.store import save_build_record
 from bot.builder.queue import BuildQueue, BuildJob
-from bot.builder.executor import execute_build, get_log_tail, _fmt_duration
+from bot.builder.executor import execute_build, get_log_tail, get_dist_files, _fmt_duration
 
 
 STEP_ICONS = {
@@ -107,12 +108,10 @@ class BuildWorker:
             for i in range(len(step_status)):
                 if i < failed - 1:
                     step_status[i] = (step_status[i][0], "done")
-            log_tail = escape(get_log_tail(build_result["log_path"]))
             msg = self._build_final_msg(
                 job, step_status, duration_str,
                 success=False,
                 error=build_result["error"],
-                log_tail=log_tail,
             )
 
         if status_msg_id:
@@ -120,22 +119,70 @@ class BuildWorker:
         else:
             send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
 
-        # Tin nhắn tóm tắt → BUILD topic
+        # Edit message gốc trong BUILD topic
+        build_msg_id = job.message_id  # message_id từ "đã thêm vào hàng đợi"
+
         if build_result["success"]:
+            dist = get_dist_files(job.project)
+            zip_name = os.path.basename(dist["zip"]) if dist["zip"] else ""
+            zip_size = ""
+            if dist["zip"]:
+                size_mb = os.path.getsize(dist["zip"]) / (1024 * 1024)
+                zip_size = f" ({size_mb:.1f} MB)"
+
             summary = (
                 f"\u2705 <b>Build #{job.build_id} THÀNH CÔNG</b>\n"
                 f"Dự án: <code>{escape(job.project)}</code> | Branch: <code>{escape(job.branch)}</code>\n"
                 f"Bởi: {escape(job.user_name)} | Thời gian: <b>{duration_str}</b>"
             )
+            if zip_name:
+                summary += f"\nFile: <code>{escape(zip_name)}</code>{zip_size}"
+
+            # Edit message gốc
+            if build_msg_id:
+                edit_message(chat_id, build_msg_id, summary, parse_mode="HTML")
+            else:
+                send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
+
+            # Gửi file zip vào BUILD topic
+            if dist["zip"]:
+                send_document(
+                    chat_id,
+                    dist["zip"],
+                    caption=f"Build #{job.build_id} - {escape(job.project)} - {zip_name}",
+                    thread_id=build_thread_id,
+                )
+
+            # Gửi file latest vào BUILD topic
+            if dist["latest"]:
+                send_document(
+                    chat_id,
+                    dist["latest"],
+                    caption=f"Build #{job.build_id} - {os.path.basename(dist['latest'])}",
+                    thread_id=build_thread_id,
+                )
         else:
             err = escape(build_result["error"] or "Lỗi không xác định")
             summary = (
                 f"\u274c <b>Build #{job.build_id} THẤT BẠI</b>\n"
                 f"Dự án: <code>{escape(job.project)}</code> | Branch: <code>{escape(job.branch)}</code>\n"
-                f"Bởi: {escape(job.user_name)} | Lỗi: {err}\n"
-                f"Xem chi tiết: /log {job.build_id}"
+                f"Bởi: {escape(job.user_name)} | Lỗi: {err}"
             )
-        send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
+
+            # Edit message gốc
+            if build_msg_id:
+                edit_message(chat_id, build_msg_id, summary, parse_mode="HTML")
+            else:
+                send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
+
+            # Gửi file log đầy đủ vào BUILD topic
+            if build_result["log_path"]:
+                send_document(
+                    chat_id,
+                    build_result["log_path"],
+                    caption=f"Build #{job.build_id} - {job.project} - log đầy đủ",
+                    thread_id=build_thread_id,
+                )
 
         # Gửi file log → LOG topic
         if build_result["log_path"]:
@@ -165,7 +212,7 @@ class BuildWorker:
 
         return "\n".join(lines)
 
-    def _build_final_msg(self, job, step_status, duration_str, success, error=None, log_tail=None):
+    def _build_final_msg(self, job, step_status, duration_str, success, error=None):
         if success:
             lines = [
                 f"\u2705 <b>Build #{job.build_id} THÀNH CÔNG</b>",
@@ -189,10 +236,6 @@ class BuildWorker:
 
         if not success and error:
             lines.append(f"\n<b>Lỗi:</b> {escape(error)}")
-
-        if not success and log_tail:
-            lines.append(f"\n<b>Log (30 dòng cuối):</b>")
-            lines.append(f"<pre>{log_tail}</pre>")
 
         return "\n".join(lines)
 

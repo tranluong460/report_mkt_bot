@@ -178,6 +178,35 @@ def get_log_tail(log_path: str, lines: int = 30) -> str:
         return "(không tìm thấy file log)"
 
 
+def get_dist_files(project: str) -> dict:
+    """Tìm file zip mới nhất và file latest.yml trong dist/ của dự án."""
+    dist_dir = os.path.join(get_project_dir(project), "dist")
+    result = {"zip": None, "latest": None}
+
+    if not os.path.isdir(dist_dir):
+        return result
+
+    # Tìm file .zip mới nhất
+    zip_files = [
+        os.path.join(dist_dir, f)
+        for f in os.listdir(dist_dir)
+        if f.endswith(".zip")
+    ]
+    if zip_files:
+        result["zip"] = max(zip_files, key=os.path.getmtime)
+
+    # Tìm file latest (latest.yml, latest-mac.yml, latest-linux.yml, ...)
+    latest_files = [
+        os.path.join(dist_dir, f)
+        for f in os.listdir(dist_dir)
+        if f.startswith("latest") and os.path.isfile(os.path.join(dist_dir, f))
+    ]
+    if latest_files:
+        result["latest"] = max(latest_files, key=os.path.getmtime)
+
+    return result
+
+
 def _fmt_duration(seconds: float) -> str:
     m = int(seconds // 60)
     s = int(seconds % 60)
