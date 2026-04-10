@@ -4,7 +4,7 @@ from datetime import datetime
 from html import escape
 
 from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID
-from bot.telegram import send_telegram_message, edit_message, send_document
+from bot.telegram import send_telegram_message, edit_message, send_document, edit_message_media
 from bot.store import save_build_record
 from bot.builder.queue import BuildQueue, BuildJob
 from bot.builder.executor import execute_build, get_dist_files, _fmt_duration
@@ -123,7 +123,7 @@ class BuildWorker:
         else:
             send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
 
-        # Edit message gốc trong BUILD topic
+        # Edit message gốc trong BUILD topic (document message)
         build_msg_id = job.message_id
         logger.info(f"Build #{job.build_id} done, build_msg_id={build_msg_id}, success={build_result['success']}")
 
@@ -135,33 +135,24 @@ class BuildWorker:
                 size_mb = os.path.getsize(dist["zip"]) / (1024 * 1024)
                 zip_size = f" ({size_mb:.1f} MB)"
 
-            summary = (
+            caption = (
                 f"\u2705 <b>Build #{job.build_id} THÀNH CÔNG</b>\n"
                 f"Dự án: <code>{escape(job.project)}</code> | Branch: <code>{escape(job.branch)}</code>\n"
                 f"Bởi: {escape(job.user_name)} | Thời gian: <b>{duration_str}</b>"
             )
             if zip_name:
-                summary += f"\nFile: <code>{escape(zip_name)}</code>{zip_size}"
+                caption += f"\nFile: <code>{escape(zip_name)}</code>{zip_size}"
 
-            # Edit message gốc
-            if build_msg_id:
-                edit_result = edit_message(chat_id, build_msg_id, summary, parse_mode="HTML")
-                logger.info(f"Edit build msg result: {edit_result}")
-                if not edit_result.get("ok"):
-                    send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
+            # Edit document message → thay file zip + caption
+            if build_msg_id and dist["zip"]:
+                edit_result = edit_message_media(chat_id, build_msg_id, dist["zip"], caption)
+                logger.info(f"Edit media result: {edit_result}")
+            elif build_msg_id:
+                edit_message(chat_id, build_msg_id, caption, parse_mode="HTML")
             else:
-                send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
+                send_telegram_message(chat_id, caption, build_thread_id, parse_mode="HTML")
 
-            # Gửi file zip vào BUILD topic
-            if dist["zip"]:
-                send_document(
-                    chat_id,
-                    dist["zip"],
-                    caption=f"Build #{job.build_id} - {escape(job.project)} - {zip_name}",
-                    thread_id=build_thread_id,
-                )
-
-            # Gửi file latest vào BUILD topic
+            # Gửi file latest riêng
             if dist["latest"]:
                 send_document(
                     chat_id,
@@ -171,29 +162,20 @@ class BuildWorker:
                 )
         else:
             err = escape(build_result["error"] or "Lỗi không xác định")
-            summary = (
+            caption = (
                 f"\u274c <b>Build #{job.build_id} THẤT BẠI</b>\n"
                 f"Dự án: <code>{escape(job.project)}</code> | Branch: <code>{escape(job.branch)}</code>\n"
                 f"Bởi: {escape(job.user_name)} | Lỗi: {err}"
             )
 
-            # Edit message gốc
-            if build_msg_id:
-                edit_result = edit_message(chat_id, build_msg_id, summary, parse_mode="HTML")
-                logger.info(f"Edit build msg result: {edit_result}")
-                if not edit_result.get("ok"):
-                    send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
+            # Edit document message → thay file log + caption lỗi
+            if build_msg_id and build_result["log_path"]:
+                edit_result = edit_message_media(chat_id, build_msg_id, build_result["log_path"], caption)
+                logger.info(f"Edit media result: {edit_result}")
+            elif build_msg_id:
+                edit_message(chat_id, build_msg_id, caption, parse_mode="HTML")
             else:
-                send_telegram_message(chat_id, summary, build_thread_id, parse_mode="HTML")
-
-            # Gửi file log đầy đủ vào BUILD topic
-            if build_result["log_path"]:
-                send_document(
-                    chat_id,
-                    build_result["log_path"],
-                    caption=f"Build #{job.build_id} - {job.project} - log đầy đủ",
-                    thread_id=build_thread_id,
-                )
+                send_telegram_message(chat_id, caption, build_thread_id, parse_mode="HTML")
 
         # Gửi file log → LOG topic
         if build_result["log_path"]:

@@ -1,10 +1,13 @@
 from html import escape
 
-from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID
+import os
+import tempfile
+
+from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
 from bot.store import get_build_authorized, next_build_id, get_recent_builds
-from bot.telegram import send_telegram_message
+from bot.telegram import send_telegram_message, send_document
 from bot.builder.queue import BuildQueue, BuildJob
-from bot.builder.executor import validate_project
+from bot.builder.executor import validate_project, ensure_log_dir
 
 
 def handle_build(
@@ -76,14 +79,21 @@ def handle_build(
         thread_id=thread_id,
     )
 
-    # Gửi message TRƯỚC, lấy message_id, rồi mới đưa vào queue
-    result = send_telegram_message(
-        chat_id,
+    # Gửi document message TRƯỚC (placeholder), lấy message_id
+    # Để sau worker có thể editMessageMedia thay file + caption
+    ensure_log_dir()
+    placeholder = os.path.join(BUILD_LOG_DIR, f"build-{build_id}.log")
+    with open(placeholder, "w", encoding="utf-8") as f:
+        f.write(f"Build #{build_id} - {project} ({branch}) - đang chờ...\n")
+
+    caption = (
         f"\u23f3 <b>Build #{build_id}</b> đang chờ...\n"
         f"Dự án: <code>{escape(project)}</code>\n"
-        f"Branch: <code>{escape(branch)}</code>",
-        thread_id,
-        parse_mode="HTML",
+        f"Branch: <code>{escape(branch)}</code>"
+    )
+    result = send_document(
+        chat_id, placeholder, caption=caption,
+        thread_id=thread_id, parse_mode="HTML",
     )
     if result.get("ok"):
         job.message_id = result["result"]["message_id"]

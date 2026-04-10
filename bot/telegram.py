@@ -98,18 +98,45 @@ def delete_webhook() -> bool:
         return False
 
 
-def send_document(chat_id: int, file_path: str, caption: str = "", thread_id: int | None = None) -> dict:
+def send_document(chat_id: int, file_path: str, caption: str = "", thread_id: int | None = None, parse_mode: str | None = None) -> dict:
     """Send a file as a document."""
     try:
         data = {"chat_id": str(chat_id)}
         if caption:
             data["caption"] = caption
+        if parse_mode:
+            data["parse_mode"] = parse_mode
         if thread_id is not None:
             data["message_thread_id"] = str(thread_id)
 
         with open(file_path, "rb") as f:
             response = _client.post(
                 f"{TELEGRAM_API}/sendDocument",
+                data=data,
+                files={"document": f},
+            )
+        return response.json()
+    except (httpx.HTTPError, FileNotFoundError):
+        return {"ok": False}
+
+
+def edit_message_media(chat_id: int, message_id: int, file_path: str, caption: str = "", parse_mode: str = "HTML") -> dict:
+    """Edit media message - thay file + caption."""
+    try:
+        import json
+        media = json.dumps({
+            "type": "document",
+            "caption": caption,
+            "parse_mode": parse_mode,
+        })
+        data = {
+            "chat_id": str(chat_id),
+            "message_id": str(message_id),
+            "media": media,
+        }
+        with open(file_path, "rb") as f:
+            response = _client.post(
+                f"{TELEGRAM_API}/editMessageMedia",
                 data=data,
                 files={"document": f},
             )
