@@ -67,20 +67,22 @@ class BuildWorker:
         log_msg_id = None
         build_start = datetime.now(VN_TZ)
 
-        # Gửi document placeholder vào LOG topic
+        # Tạo placeholder log file + gửi vào LOG topic
+        from bot.builder.executor import ensure_log_dir
+        ensure_log_dir()
         log_path = os.path.join(BUILD_LOG_DIR, f"build-{job.build_id}.log")
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write(f"Build #{job.build_id} - {job.project} ({job.branch}) - đang chờ...\n")
+
         init_caption = (
             f"\U0001f528 <b>Build #{job.build_id}</b> đang chờ...\n"
             f"Dự án: <code>{escape(job.project)}</code> | Branch: <code>{escape(job.branch)}</code>"
         )
-        if os.path.exists(log_path):
-            logger.info(f"[LOG] #{job.build_id} sending placeholder doc to log topic, thread={log_thread_id}")
-            init_result = send_document(chat_id, log_path, caption=init_caption, thread_id=log_thread_id, parse_mode="HTML")
-            logger.info(f"[LOG] #{job.build_id} placeholder result: ok={init_result.get('ok')} msg_id={init_result.get('result',{}).get('message_id')}")
-            if init_result.get("ok"):
-                log_msg_id = init_result["result"]["message_id"]
-        else:
-            logger.warning(f"[LOG] #{job.build_id} log file not found: {log_path}")
+        logger.info(f"[LOG] #{job.build_id} sending placeholder doc to log topic, thread={log_thread_id}")
+        init_result = send_document(chat_id, log_path, caption=init_caption, thread_id=log_thread_id, parse_mode="HTML")
+        logger.info(f"[LOG] #{job.build_id} placeholder result: ok={init_result.get('ok')} msg_id={init_result.get('result',{}).get('message_id')}")
+        if init_result.get("ok"):
+            log_msg_id = init_result["result"]["message_id"]
 
         def on_step(current: int, total: int, label: str, status: str):
             nonlocal step_status, log_msg_id
