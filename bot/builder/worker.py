@@ -3,8 +3,8 @@ import threading
 from datetime import datetime
 from html import escape
 
-from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID
-from bot.telegram import send_telegram_message, edit_message, send_document, edit_message_media
+from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID, BUILD_LOG_DIR
+from bot.telegram import send_telegram_message, edit_message, send_document, send_media_group, edit_message_media, delete_message
 from bot.store import save_build_record
 from bot.builder.queue import BuildQueue, BuildJob
 from bot.builder.executor import execute_build, get_dist_files, _fmt_duration
@@ -64,11 +64,22 @@ class BuildWorker:
         log_thread_id = self._get_log_topic_id()
 
         step_status: list[tuple[str, str]] = []
-        status_msg_id = None
+        log_msg_id = None
         build_start = datetime.now(VN_TZ)
 
+        # Gửi document placeholder vào LOG topic
+        log_path = os.path.join(BUILD_LOG_DIR, f"build-{job.build_id}.log")
+        init_caption = (
+            f"\U0001f528 <b>Build #{job.build_id}</b> đang chờ...\n"
+            f"Dự án: <code>{escape(job.project)}</code> | Branch: <code>{escape(job.branch)}</code>"
+        )
+        if os.path.exists(log_path):
+            init_result = send_document(chat_id, log_path, caption=init_caption, thread_id=log_thread_id, parse_mode="HTML")
+            if init_result.get("ok"):
+                log_msg_id = init_result["result"]["message_id"]
+
         def on_step(current: int, total: int, label: str, status: str):
-            nonlocal step_status, status_msg_id
+            nonlocal step_status, log_msg_id
 
             while len(step_status) < total:
                 step_status.append(("", "pending"))
@@ -76,12 +87,13 @@ class BuildWorker:
 
             msg = self._build_progress_msg(job, step_status, current, total, build_start)
 
-            if status_msg_id:
-                edit_message(chat_id, status_msg_id, msg, parse_mode="HTML")
+            # Edit caption của document message trong LOG topic
+            if log_msg_id:
+                edit_message(chat_id, log_msg_id, msg, parse_mode="HTML")
             else:
                 result = send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
                 if result.get("ok"):
-                    status_msg_id = result["result"]["message_id"]
+                    log_msg_id = result["result"]["message_id"]
 
         # Chạy build
         build_result = execute_build(
@@ -118,14 +130,21 @@ class BuildWorker:
                 error=build_result["error"],
             )
 
-        if status_msg_id:
-            edit_message(chat_id, status_msg_id, msg, parse_mode="HTML")
+        # === LOG TOPIC: luôn thay bằng file log mới nhất ===
+        if log_msg_id and build_result["log_path"]:
+            edit_message_media(chat_id, log_msg_id, build_result["log_path"], msg)
+        elif log_msg_id:
+            edit_message(chat_id, log_msg_id, msg, parse_mode="HTML")
         else:
-            send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
+            if build_result["log_path"]:
+                send_document(chat_id, build_result["log_path"], caption=msg, thread_id=log_thread_id, parse_mode="HTML")
+            else:
+                send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
 
-        # Edit message gốc trong BUILD topic (document message)
-        build_msg_id = job.message_id
-        logger.info(f"Build #{job.build_id} done, build_msg_id={build_msg_id}, success={build_result['success']}")
+        # === BUILD TOPIC (media group: msg1=zip, msg2=yml) ===
+        msg_zip = job.message_id      # message_id của file zip
+        msg_yml = job.message_id_2    # message_id của file yml
+        logger.info(f"Build #{job.build_id} done, msg_zip={msg_zip}, msg_yml={msg_yml}, success={build_result['success']}")
 
         if build_result["success"]:
             dist = get_dist_files(job.project)
@@ -143,23 +162,18 @@ class BuildWorker:
             if zip_name:
                 caption += f"\nFile: <code>{escape(zip_name)}</code>{zip_size}"
 
-            # Edit document message → thay file zip + caption
-            if build_msg_id and dist["zip"]:
-                edit_result = edit_message_media(chat_id, build_msg_id, dist["zip"], caption)
-                logger.info(f"Edit media result: {edit_result}")
-            elif build_msg_id:
-                edit_message(chat_id, build_msg_id, caption, parse_mode="HTML")
-            else:
-                send_telegram_message(chat_id, caption, build_thread_id, parse_mode="HTML")
+            # Thành công → thay placeholder zip bằng zip thật
+            if msg_zip and dist["zip"]:
+                edit_message_media(chat_id, msg_zip, dist["zip"], caption)
+            elif msg_zip:
+                edit_message(chat_id, msg_zip, caption, parse_mode="HTML")
 
-            # Gửi file latest riêng
-            if dist["latest"]:
-                send_document(
-                    chat_id,
-                    dist["latest"],
-                    caption=f"Build #{job.build_id} - {os.path.basename(dist['latest'])}",
-                    thread_id=build_thread_id,
-                )
+            # Thay placeholder yml bằng latest.yml thật
+            if msg_yml and dist["latest"]:
+                edit_message_media(chat_id, msg_yml, dist["latest"])
+            elif msg_yml and not dist["latest"]:
+                delete_message(chat_id, msg_yml)
+
         else:
             err = escape(build_result["error"] or "Lỗi không xác định")
             caption = (
@@ -168,23 +182,16 @@ class BuildWorker:
                 f"Bởi: {escape(job.user_name)} | Lỗi: {err}"
             )
 
-            # Edit document message → thay file log + caption lỗi
-            if build_msg_id and build_result["log_path"]:
-                edit_result = edit_message_media(chat_id, build_msg_id, build_result["log_path"], caption)
-                logger.info(f"Edit media result: {edit_result}")
-            elif build_msg_id:
-                edit_message(chat_id, build_msg_id, caption, parse_mode="HTML")
-            else:
-                send_telegram_message(chat_id, caption, build_thread_id, parse_mode="HTML")
+            # Thất bại → thay placeholder zip bằng file log
+            if msg_zip and build_result["log_path"]:
+                edit_message_media(chat_id, msg_zip, build_result["log_path"], caption)
+            elif msg_zip:
+                edit_message(chat_id, msg_zip, caption, parse_mode="HTML")
 
-        # Gửi file log → LOG topic
-        if build_result["log_path"]:
-            send_document(
-                chat_id,
-                build_result["log_path"],
-                caption=f"Build #{job.build_id} - {job.project} - log đầy đủ",
-                thread_id=log_thread_id,
-            )
+            # Xoá placeholder yml (không cần nữa)
+            if msg_yml:
+                delete_message(chat_id, msg_yml)
+
 
     def _build_progress_msg(self, job, step_status, current, total, start_time):
         elapsed = (datetime.now(VN_TZ) - start_time).total_seconds()

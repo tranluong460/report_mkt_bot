@@ -17,7 +17,8 @@ class BuildJob:
     user_name: str
     chat_id: int
     thread_id: int | None
-    message_id: int | None = None
+    message_id: int | None = None    # message zip trong media group
+    message_id_2: int | None = None  # message yml trong media group
     created_at: str = field(default_factory=lambda: datetime.now(VN_TZ).strftime("%d/%m/%Y %H:%M:%S"))
 
 
