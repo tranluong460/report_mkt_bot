@@ -65,7 +65,7 @@ def handle_build(
         send_telegram_message(chat_id, "Lỗi Redis, không tạo được build ID.", thread_id)
         return
 
-    # Tạo job và thêm vào hàng đợi
+    # Tạo job
     job = BuildJob(
         build_id=build_id,
         project=project,
@@ -76,21 +76,26 @@ def handle_build(
         thread_id=thread_id,
     )
 
+    # Gửi message TRƯỚC, lấy message_id, rồi mới đưa vào queue
+    result = send_telegram_message(
+        chat_id,
+        f"\u23f3 <b>Build #{build_id}</b> đang chờ...\n"
+        f"Dự án: <code>{escape(project)}</code>\n"
+        f"Branch: <code>{escape(branch)}</code>",
+        thread_id,
+        parse_mode="HTML",
+    )
+    if result.get("ok"):
+        job.message_id = result["result"]["message_id"]
+
+    # Thêm vào queue
     success, position = build_queue.put(job)
-    if success:
-        result = send_telegram_message(
-            chat_id,
-            f"\u23f3 <b>Build #{build_id}</b> đã thêm vào hàng đợi (vị trí #{position})\n"
-            f"Dự án: <code>{escape(project)}</code>\n"
-            f"Branch: <code>{escape(branch)}</code>",
-            thread_id,
-            parse_mode="HTML",
-        )
-        # Lưu message_id để worker edit lại sau
-        if result.get("ok"):
-            job.message_id = result["result"]["message_id"]
-    else:
-        send_telegram_message(chat_id, "Hàng đợi đầy (tối đa 5). Vui lòng thử lại sau.", thread_id)
+    if not success:
+        if job.message_id:
+            from bot.telegram import edit_message
+            edit_message(chat_id, job.message_id, "Hàng đợi đầy (tối đa 5). Vui lòng thử lại sau.")
+        else:
+            send_telegram_message(chat_id, "Hàng đợi đầy (tối đa 5). Vui lòng thử lại sau.", thread_id)
 
 
 def handle_cancel(chat_id: int, thread_id, text: str, user_id: str, build_queue: BuildQueue) -> None:

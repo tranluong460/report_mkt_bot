@@ -7,7 +7,7 @@ from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID
 from bot.telegram import send_telegram_message, edit_message, send_document
 from bot.store import save_build_record
 from bot.builder.queue import BuildQueue, BuildJob
-from bot.builder.executor import execute_build, get_log_tail, get_dist_files, _fmt_duration
+from bot.builder.executor import execute_build, get_dist_files, _fmt_duration
 
 
 STEP_ICONS = {
