@@ -126,12 +126,13 @@ def send_media_group(chat_id: int, files: list[str], caption: str = "", thread_i
     try:
         media = []
         file_uploads = {}
+        last = len(files) - 1
         for i, fp in enumerate(files):
             attach_key = f"file{i}"
             media.append({
                 "type": "document",
                 "media": f"attach://{attach_key}",
-                **({"caption": caption, "parse_mode": parse_mode} if i == 0 else {}),
+                **({"caption": caption, "parse_mode": parse_mode} if i == last else {}),
             })
             file_uploads[attach_key] = open(fp, "rb")
 

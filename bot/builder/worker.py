@@ -141,9 +141,9 @@ class BuildWorker:
             else:
                 send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
 
-        # === BUILD TOPIC (media group: msg1=zip, msg2=yml) ===
-        msg_zip = job.message_id      # message_id của file zip
-        msg_yml = job.message_id_2    # message_id của file yml
+        # === BUILD TOPIC (media group: msg1=zip, msg2=yml có caption) ===
+        msg_zip = job.message_id      # message_id file zip
+        msg_yml = job.message_id_2    # message_id file yml (có caption)
         logger.info(f"Build #{job.build_id} done, msg_zip={msg_zip}, msg_yml={msg_yml}, success={build_result['success']}")
 
         if build_result["success"]:
@@ -162,17 +162,15 @@ class BuildWorker:
             if zip_name:
                 caption += f"\nFile: <code>{escape(zip_name)}</code>{zip_size}"
 
-            # Thành công → thay placeholder zip bằng zip thật
+            # Thay placeholder zip bằng zip thật (không caption)
             if msg_zip and dist["zip"]:
-                edit_message_media(chat_id, msg_zip, dist["zip"], caption)
-            elif msg_zip:
-                edit_message(chat_id, msg_zip, caption, parse_mode="HTML")
+                edit_message_media(chat_id, msg_zip, dist["zip"])
 
-            # Thay placeholder yml bằng latest.yml thật
+            # Thay placeholder yml bằng latest.yml thật (có caption)
             if msg_yml and dist["latest"]:
-                edit_message_media(chat_id, msg_yml, dist["latest"])
-            elif msg_yml and not dist["latest"]:
-                delete_message(chat_id, msg_yml)
+                edit_message_media(chat_id, msg_yml, dist["latest"], caption)
+            elif msg_yml:
+                edit_message_media(chat_id, msg_yml, dist["latest"] or build_result["log_path"], caption)
 
         else:
             err = escape(build_result["error"] or "Lỗi không xác định")
@@ -182,13 +180,11 @@ class BuildWorker:
                 f"Bởi: {escape(job.user_name)} | Lỗi: {err}"
             )
 
-            # Thất bại → thay placeholder zip bằng file log
+            # Thay placeholder zip bằng file log (không caption)
             if msg_zip and build_result["log_path"]:
-                edit_message_media(chat_id, msg_zip, build_result["log_path"], caption)
-            elif msg_zip:
-                edit_message(chat_id, msg_zip, caption, parse_mode="HTML")
+                edit_message_media(chat_id, msg_zip, build_result["log_path"])
 
-            # Xoá placeholder yml (không cần nữa)
+            # Xoá placeholder yml, không cần nữa
             if msg_yml:
                 delete_message(chat_id, msg_yml)
 

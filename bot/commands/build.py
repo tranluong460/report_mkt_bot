@@ -4,7 +4,7 @@ import os
 
 from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
 from bot.store import get_build_authorized, next_build_id, get_recent_builds
-from bot.telegram import send_telegram_message, send_media_group
+from bot.telegram import send_telegram_message, send_document
 from bot.builder.queue import BuildQueue, BuildJob
 from bot.builder.executor import validate_project, ensure_log_dir
 
