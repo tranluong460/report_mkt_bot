@@ -74,9 +74,13 @@ class BuildWorker:
             f"Dự án: <code>{escape(job.project)}</code> | Branch: <code>{escape(job.branch)}</code>"
         )
         if os.path.exists(log_path):
+            logger.info(f"[LOG] #{job.build_id} sending placeholder doc to log topic, thread={log_thread_id}")
             init_result = send_document(chat_id, log_path, caption=init_caption, thread_id=log_thread_id, parse_mode="HTML")
+            logger.info(f"[LOG] #{job.build_id} placeholder result: ok={init_result.get('ok')} msg_id={init_result.get('result',{}).get('message_id')}")
             if init_result.get("ok"):
                 log_msg_id = init_result["result"]["message_id"]
+        else:
+            logger.warning(f"[LOG] #{job.build_id} log file not found: {log_path}")
 
         def on_step(current: int, total: int, label: str, status: str):
             nonlocal step_status, log_msg_id
@@ -131,23 +135,31 @@ class BuildWorker:
             )
 
         # === LOG TOPIC: luôn thay bằng file log mới nhất ===
+        logger.info(f"[LOG] #{job.build_id} updating log topic | log_msg_id={log_msg_id} | log_path={build_result.get('log_path')}")
         if log_msg_id and build_result["log_path"]:
-            edit_message_media(chat_id, log_msg_id, build_result["log_path"], msg)
+            logger.info(f"[LOG] #{job.build_id} editMedia log_msg_id={log_msg_id} -> {build_result['log_path']}")
+            r = edit_message_media(chat_id, log_msg_id, build_result["log_path"], msg)
+            logger.info(f"[LOG] #{job.build_id} editMedia result: ok={r.get('ok')} {r.get('description','')}")
         elif log_msg_id:
+            logger.info(f"[LOG] #{job.build_id} editText log_msg_id={log_msg_id}")
             edit_message(chat_id, log_msg_id, msg, parse_mode="HTML")
         else:
             if build_result["log_path"]:
+                logger.info(f"[LOG] #{job.build_id} sendDocument new (no log_msg_id)")
                 send_document(chat_id, build_result["log_path"], caption=msg, thread_id=log_thread_id, parse_mode="HTML")
             else:
+                logger.info(f"[LOG] #{job.build_id} sendText new (no log_msg_id, no log)")
                 send_telegram_message(chat_id, msg, log_thread_id, parse_mode="HTML")
 
         # === BUILD TOPIC (2 document riêng: msg_zip + msg_yml) ===
-        msg_zip = job.message_id      # message_id file zip
-        msg_yml = job.message_id_2    # message_id file yml (có caption)
-        logger.info(f"Build #{job.build_id} done, msg_zip={msg_zip}, msg_yml={msg_yml}, success={build_result['success']}")
+        msg_zip = job.message_id
+        msg_yml = job.message_id_2
+        logger.info(f"[BUILD] #{job.build_id} done | success={build_result['success']} | msg_zip={msg_zip} | msg_yml={msg_yml} | log={build_result.get('log_path')}")
 
         if build_result["success"]:
             dist = get_dist_files(job.project)
+            logger.info(f"[BUILD] #{job.build_id} dist files: zip={dist['zip']} | latest={dist['latest']}")
+
             zip_name = os.path.basename(dist["zip"]) if dist["zip"] else ""
             zip_size = ""
             if dist["zip"]:
@@ -164,12 +176,17 @@ class BuildWorker:
 
             # Edit zip placeholder → zip thật
             if msg_zip and dist["zip"]:
-                edit_message_media(chat_id, msg_zip, dist["zip"])
+                logger.info(f"[BUILD] #{job.build_id} editMedia msg_zip={msg_zip} -> {dist['zip']}")
+                r = edit_message_media(chat_id, msg_zip, dist["zip"])
+                logger.info(f"[BUILD] #{job.build_id} editMedia zip result: ok={r.get('ok')} {r.get('description','')}")
 
             # Edit yml placeholder → latest.yml thật + caption
             if msg_yml and dist["latest"]:
-                edit_message_media(chat_id, msg_yml, dist["latest"], caption)
+                logger.info(f"[BUILD] #{job.build_id} editMedia msg_yml={msg_yml} -> {dist['latest']} + caption")
+                r = edit_message_media(chat_id, msg_yml, dist["latest"], caption)
+                logger.info(f"[BUILD] #{job.build_id} editMedia yml result: ok={r.get('ok')} {r.get('description','')}")
             elif msg_yml:
+                logger.info(f"[BUILD] #{job.build_id} no latest.yml, editText msg_yml={msg_yml}")
                 edit_message(chat_id, msg_yml, caption, parse_mode="HTML")
 
         else:
@@ -182,12 +199,16 @@ class BuildWorker:
 
             # Xoá zip placeholder
             if msg_zip:
+                logger.info(f"[BUILD] #{job.build_id} deleteMessage msg_zip={msg_zip}")
                 delete_message(chat_id, msg_zip)
 
             # Edit yml placeholder → log file + caption lỗi
             if msg_yml and build_result["log_path"]:
-                edit_message_media(chat_id, msg_yml, build_result["log_path"], caption)
+                logger.info(f"[BUILD] #{job.build_id} editMedia msg_yml={msg_yml} -> {build_result['log_path']} + caption")
+                r = edit_message_media(chat_id, msg_yml, build_result["log_path"], caption)
+                logger.info(f"[BUILD] #{job.build_id} editMedia yml->log result: ok={r.get('ok')} {r.get('description','')}")
             elif msg_yml:
+                logger.info(f"[BUILD] #{job.build_id} no log, editText msg_yml={msg_yml}")
                 edit_message(chat_id, msg_yml, caption, parse_mode="HTML")
 
 

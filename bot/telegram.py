@@ -160,6 +160,7 @@ def edit_message_media(chat_id: int, message_id: int, file_path: str, caption: s
         import json
         media = json.dumps({
             "type": "document",
+            "media": "attach://document",
             "caption": caption,
             "parse_mode": parse_mode,
         })
@@ -174,8 +175,14 @@ def edit_message_media(chat_id: int, message_id: int, file_path: str, caption: s
                 data=data,
                 files={"document": f},
             )
-        return response.json()
-    except (httpx.HTTPError, FileNotFoundError):
+        result = response.json()
+        if not result.get("ok"):
+            import logging
+            logging.getLogger("bot.telegram").warning(f"editMessageMedia failed: {result}")
+        return result
+    except (httpx.HTTPError, FileNotFoundError) as e:
+        import logging
+        logging.getLogger("bot.telegram").warning(f"editMessageMedia error: {e}")
         return {"ok": False}
 
 
