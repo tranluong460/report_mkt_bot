@@ -4,7 +4,7 @@ from datetime import datetime
 from bot.config import TELEGRAM_API, VN_TZ
 
 # Persistent client for connection reuse
-_client = httpx.Client(timeout=httpx.Timeout(connect=10, read=35, write=10, pool=10))
+_client = httpx.Client(timeout=httpx.Timeout(connect=10, read=300, write=300, pool=10))
 
 
 def react_to_message(chat_id: int, message_id: int, emoji: str) -> None:

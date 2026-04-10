@@ -20,7 +20,11 @@ BUILD_LOG_DIR = os.environ.get("BUILD_LOG_DIR", "D:/Code/builds/logs")
 BUILD_PROJECT_DIR = os.environ.get("BUILD_PROJECT_DIR", "D:/Code")
 
 # --- Telegram API ---
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+TELEGRAM_LOCAL_API = os.environ.get("TELEGRAM_LOCAL_API", "")
+if TELEGRAM_LOCAL_API:
+    TELEGRAM_API = f"{TELEGRAM_LOCAL_API}/bot{BOT_TOKEN}"
+else:
+    TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # --- Timezone Vietnam (UTC+7) ---
 VN_TZ = timezone(timedelta(hours=7))
