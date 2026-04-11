@@ -133,25 +133,28 @@ def build_system_error(build_id: int, error: str) -> str:
 
 HELP_TEXT = """<b>Danh sách lệnh:</b>
 
+<b>Chung:</b>
+/help - Hiển thị danh sách lệnh này
+
 <b>Báo cáo:</b>
 <code>date: ...</code> - Gửi báo cáo trong report topic
 
 <b>Thành viên:</b>
 /follow - Đăng ký nhận thông báo
 /unfollow - Huỷ đăng ký
-/all <code>&lt;nội dung&gt;</code> - Gửi thông báo tới tất cả
+/all <code>&lt;nội dung&gt;</code> - Gửi thông báo tới tất cả người đã follow
 
 <b>Build:</b>
 /build <code>&lt;dự án&gt; [branch]</code> - Yêu cầu build
 /cancel <code>&lt;id&gt;</code> - Huỷ build trong hàng đợi
 /queue - Xem hàng đợi build
 /status - Xem build đang chạy
-/log <code>&lt;id&gt;</code> - Xem log build
-/build_history - Lịch sử build gần đây
+/log <code>&lt;id&gt;</code> - Xem 40 dòng log cuối của build
+/build_history - Lịch sử 10 build gần đây
 
 <b>Admin:</b>
-/debug - Trạng thái hệ thống
-/build_auth <code>&lt;user_id&gt;</code> - Cấp quyền build
+/debug - Trạng thái hệ thống (Redis, reports, quyền)
+/build_auth <code>&lt;user_id&gt;</code> - Cấp quyền build cho user
 /build_unauth <code>&lt;user_id&gt;</code> - Xoá quyền build"""
 
 
