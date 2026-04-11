@@ -28,7 +28,7 @@ def weekly_reminder() -> str:
     monday = today - timedelta(days=today.weekday())
     saturday = monday + timedelta(days=5)
     return (
-        f"*{EMOJI_REPORT} Nhắc báo cáo tuần  "
+        f"*{EMOJI_REPORT} Nhắc báo cáo tuần "
         f"{monday.strftime('%d/%m/%Y')} - {saturday.strftime('%d/%m/%Y')}*\n\n"
         "Mọi người gửi báo cáo công việc hôm nay vào topic này nhé!"
     )

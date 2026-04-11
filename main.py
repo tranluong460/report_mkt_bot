@@ -40,19 +40,28 @@ stop_event = threading.Event()
 
 def send_daily_reminder():
     logger.info("Sending daily reminder...")
-    send_telegram_message(int(GROUP_CHAT_ID), messages.daily_reminder(), int(TOPIC_ID))
+    send_telegram_message(
+        int(GROUP_CHAT_ID), messages.daily_reminder(), int(TOPIC_ID),
+        parse_mode="Markdown",
+    )
 
 
 def send_weekly_reminder():
     logger.info("Sending weekly reminder...")
-    send_telegram_message(int(GROUP_CHAT_ID), messages.weekly_reminder(), int(WEEKLY_TOPIC_ID))
+    send_telegram_message(
+        int(GROUP_CHAT_ID), messages.weekly_reminder(), int(WEEKLY_TOPIC_ID),
+        parse_mode="Markdown",
+    )
 
 
 def send_daily_summary():
     logger.info("Sending daily summary...")
     reports = get_today_reports()
     msg = build_summary_message(reports)
-    send_telegram_message(int(GROUP_CHAT_ID), msg, int(BUILD_TOPIC_ID))
+    send_telegram_message(
+        int(GROUP_CHAT_ID), msg, int(BUILD_TOPIC_ID),
+        parse_mode="Markdown",
+    )
 
 
 def setup_scheduler() -> BackgroundScheduler:

@@ -8,7 +8,7 @@ from datetime import datetime
 import time
 
 from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID, BUILD_LOG_DIR
-from bot.constants import STEP_ICONS, MAX_CONCURRENT_BUILDS, EDIT_THROTTLE_SECONDS
+from bot.constants import MAX_CONCURRENT_BUILDS, EDIT_THROTTLE_SECONDS
 from bot.telegram import (
     send_telegram_message, edit_message_caption, send_document,
     edit_message_media, delete_message, send_media_group,
@@ -62,74 +62,92 @@ class BuildWorker:
                 self._queue.done(job.project)
 
     def _process_job(self, job: BuildJob):
+        ctx = self._build_context(job)
+        ctx["log_msg_id"] = self._send_log_placeholder(ctx["chat_id"], ctx["log_thread_id"], job)
+        self._register(job, ctx)
+
+        # Chạy build với callback cập nhật progress
+        step_status, result = self._execute_with_progress(job, ctx)
+
+        # Finalize: lưu record, cập nhật messages, xoá command, unregister
+        self._finalize(job, ctx, result, step_status)
+
+    # ===== Context =====
+
+    def _build_context(self, job: BuildJob) -> dict:
         chat_id = int(GROUP_CHAT_ID)
         build_thread_id = int(BUILD_TOPIC_ID)
         log_thread_id = int(LOG_TOPIC_ID) if LOG_TOPIC_ID else build_thread_id
-
-        # Gửi placeholder vào LOG topic
-        log_msg_id = self._send_log_placeholder(chat_id, log_thread_id, job)
-
-        # Đăng ký active build để cleanup nếu restart
-        register_active_build(job.build_id, {
+        return {
             "chat_id": chat_id,
-            "build_msg_id": job.message_id,
-            "log_msg_id": log_msg_id,
-            "log_thread_id": log_thread_id,
             "build_thread_id": build_thread_id,
+            "log_thread_id": log_thread_id,
+            "log_msg_id": None,
+        }
+
+    def _register(self, job: BuildJob, ctx: dict):
+        register_active_build(job.build_id, {
+            "chat_id": ctx["chat_id"],
+            "build_msg_id": job.message_id,
+            "log_msg_id": ctx["log_msg_id"],
+            "log_thread_id": ctx["log_thread_id"],
+            "build_thread_id": ctx["build_thread_id"],
             "project": job.project,
             "branch": job.branch,
         })
 
-        # Callback cập nhật tiến độ - throttle tối thiểu EDIT_THROTTLE_SECONDS
+    # ===== Execute with progress callback =====
+
+    def _execute_with_progress(self, job: BuildJob, ctx: dict):
         step_status: list[tuple[str, str]] = []
         build_start = datetime.now(VN_TZ)
-        last_edit = [0.0]  # dùng list để mutable trong closure
+        last_edit = [0.0]  # mutable trong closure
 
         def on_step(current: int, total: int, label: str, status: str):
             while len(step_status) < total:
                 step_status.append(("", "pending"))
             step_status[current - 1] = (label, status)
+            self._maybe_update_progress(job, ctx, step_status, total, build_start, last_edit, current, status)
 
-            if not log_msg_id:
-                return
-
-            # Throttle: chỉ edit nếu đã qua EDIT_THROTTLE_SECONDS kể từ lần cuối
-            # Luôn edit khi status = "done" ở step cuối (để thấy hoàn thành)
-            now = time.time()
-            is_last_step_done = (current == total and status == "done")
-            if not is_last_step_done and now - last_edit[0] < EDIT_THROTTLE_SECONDS:
-                return
-            last_edit[0] = now
-
-            elapsed = _fmt_duration((datetime.now(VN_TZ) - build_start).total_seconds())
-            msg = messages.build_log_header(
-                job.build_id, job.project, job.branch, job.user_name,
-                elapsed, step_status, total,
-            )
-            edit_message_caption(chat_id, log_msg_id, msg)
-
-        # Chạy build
         result = execute_build(job.project, job.branch, job.build_id, on_step=on_step)
+        return step_status, result
+
+    def _maybe_update_progress(self, job, ctx, step_status, total, build_start,
+                                last_edit, current, status):
+        """Edit caption nếu đã qua throttle hoặc step cuối hoàn thành."""
+        log_msg_id = ctx["log_msg_id"]
+        if not log_msg_id:
+            return
+
+        now = time.time()
+        is_last_step_done = (current == total and status == "done")
+        if not is_last_step_done and now - last_edit[0] < EDIT_THROTTLE_SECONDS:
+            return
+        last_edit[0] = now
+
+        elapsed = _fmt_duration((datetime.now(VN_TZ) - build_start).total_seconds())
+        msg = messages.build_log_header(
+            job.build_id, job.project, job.branch, job.user_name,
+            elapsed, step_status, total,
+        )
+        edit_message_caption(ctx["chat_id"], log_msg_id, msg)
+
+    # ===== Finalize =====
+
+    def _finalize(self, job: BuildJob, ctx: dict, result: dict, step_status: list):
         duration_str = _fmt_duration(result["duration"])
-
-        # Lưu Redis
         self._save_record(job, result, duration_str)
-
-        # Cập nhật step status cuối
         self._finalize_step_status(step_status, result)
 
-        # Cập nhật LOG topic
-        self._update_log_topic(chat_id, log_msg_id, log_thread_id, job, result,
-                               duration_str, step_status)
+        self._update_log_topic(
+            ctx["chat_id"], ctx["log_msg_id"], ctx["log_thread_id"],
+            job, result, duration_str, step_status,
+        )
+        self._update_build_topic(ctx["chat_id"], ctx["build_thread_id"], job, result, duration_str)
 
-        # Cập nhật BUILD topic
-        self._update_build_topic(chat_id, build_thread_id, job, result, duration_str)
-
-        # Xoá message /build của user
         if job.command_message_id:
-            delete_message(chat_id, job.command_message_id)
+            delete_message(ctx["chat_id"], job.command_message_id)
 
-        # Unregister active build
         unregister_active_build(job.build_id)
 
     # ===== Helpers =====

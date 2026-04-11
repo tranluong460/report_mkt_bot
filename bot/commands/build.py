@@ -6,7 +6,7 @@ from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
 from bot.store import get_build_authorized, next_build_id, get_recent_builds, register_active_build
 from bot.telegram import send_telegram_message, send_document, edit_message_media, delete_message
 from bot import messages
-from bot.builder.queue import BuildQueue, BuildJob
+from bot.builder.queue import BuildJob
 from bot.builder.executor import validate_project, ensure_log_dir, get_log_tail
 
 
