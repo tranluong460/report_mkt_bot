@@ -26,6 +26,42 @@ FAST_BUILD_THRESHOLD = 120         # < 2 phút = fast
 SLOW_BUILD_THRESHOLD = 600         # > 10 phút = slow
 POPULAR_BUILD_THRESHOLD = 5        # project build >= 5 lần/tuần = popular
 
+# --- Bot commands (hiện trong menu "/" + dùng để build HELP_TEXT)
+# Format: (command, short_description, long_description, group)
+# - short: hiện trong menu "/" Telegram (cần ngắn gọn)
+# - long: hiện trong /help (có thể dài hơn, dùng HTML)
+COMMAND_GROUPS = ["Chung", "Báo cáo", "Thành viên", "Build", "Admin"]
+
+BOT_COMMANDS = [
+    # Chung
+    ("help", "Danh sách lệnh", "Hiển thị danh sách lệnh này", "Chung"),
+    ("health", "Kiểm tra sức khoẻ hệ thống", "Kiểm tra sức khoẻ hệ thống", "Chung"),
+
+    # Báo cáo
+    ("export", "Xuất báo cáo hôm nay ra file", "Xuất báo cáo hôm nay ra file", "Báo cáo"),
+
+    # Thành viên
+    ("follow", "Đăng ký nhận thông báo", "Đăng ký nhận thông báo (tự động khi nộp báo cáo)", "Thành viên"),
+    ("unfollow", "Huỷ đăng ký thông báo", "Huỷ đăng ký", "Thành viên"),
+    ("all", "Gửi thông báo tới tất cả", "<code>&lt;nội dung&gt;</code> Gửi thông báo tới tất cả người đã follow", "Thành viên"),
+
+    # Build
+    ("build", "Yêu cầu build (1 hoặc nhiều dự án)",
+     "<code>&lt;dự án&gt; [branch]</code> hoặc <code>&lt;ds1&gt; &lt;ds2&gt; ...</code> để build song song", "Build"),
+    ("retry", "Retry 1 build thất bại", "<code>&lt;id&gt;</code> Retry 1 build đã thất bại", "Build"),
+    ("cancel", "Huỷ build trong hàng đợi", "<code>&lt;id&gt;</code> Huỷ build trong hàng đợi", "Build"),
+    ("queue", "Xem hàng đợi build", "Xem hàng đợi build", "Build"),
+    ("status", "Xem build đang chạy", "Xem build đang chạy", "Build"),
+    ("log", "Xem log build", "<code>&lt;id&gt;</code> Xem 40 dòng log cuối của build", "Build"),
+    ("build_history", "Lịch sử 10 build gần đây", "Lịch sử 10 build gần đây", "Build"),
+    ("stats", "Thống kê build", "Thống kê build (tổng, theo project, top users)", "Build"),
+
+    # Admin
+    ("debug", "Trạng thái hệ thống (admin)", "Trạng thái hệ thống (Redis, reports, quyền)", "Admin"),
+    ("build_auth", "Cấp quyền build (admin)", "<code>&lt;user_id&gt;</code> Cấp quyền build cho user", "Admin"),
+    ("build_unauth", "Xoá quyền build (admin)", "<code>&lt;user_id&gt;</code> Xoá quyền build", "Admin"),
+]
+
 # --- Step status icons ---
 STEP_ICONS = {
     "running": EMOJI_HOURGLASS,
@@ -43,7 +79,6 @@ KEY_BUILD_AUTH = "build:authorized"      # Set: user_id
 KEY_BUILD_COUNTER = "build:counter"      # Int: auto-increment
 KEY_BUILDS_RECENT = "builds:recent"      # List: JSON của 20 builds gần nhất
 KEY_BUILD_ACTIVE = "build:active"        # Hash: build_id -> JSON {chat_id, message_ids, project, branch}
-KEY_BUILD_SEEN = "build:seen_users"      # Set: user_ids đã gọi /build lần đầu (để hiện guide)
 
 # --- TTL (giây) ---
 TTL_REPORT = 172800          # 2 ngày

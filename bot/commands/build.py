@@ -5,7 +5,7 @@ import os
 from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
 from bot.store import (
     get_build_authorized, next_build_id, get_recent_builds,
-    register_active_build, has_seen_build, mark_build_seen,
+    register_active_build,
 )
 from bot.telegram import send_telegram_message, send_document, edit_message_media, delete_message
 from bot import messages
@@ -30,11 +30,6 @@ def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, buil
     jobs_spec = _parse_build_args(chat_id, thread_id, text)
     if not jobs_spec:
         return
-
-    # First-time guide
-    if not has_seen_build(user_id):
-        _send(chat_id, messages.first_time_build_guide(first_name), thread_id)
-        mark_build_seen(user_id)
 
     # Multi-build: xoá command message ngay sau khi parse OK (không cần chờ)
     # Single-build: để worker xoá sau khi build xong

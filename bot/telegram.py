@@ -237,3 +237,23 @@ def delete_webhook() -> bool:
         return response.json().get("ok", False)
     except httpx.HTTPError:
         return False
+
+
+def set_my_commands(commands: list) -> bool:
+    """Đăng ký danh sách lệnh để hiện menu "/" trong Telegram.
+
+    commands: list of tuples. Chỉ lấy 2 field đầu: (cmd, short_desc).
+    command KHÔNG có "/" đầu, description tối đa 256 ký tự.
+    """
+    try:
+        payload = {
+            "commands": [
+                {"command": c[0], "description": c[1][:256]}
+                for c in commands
+            ]
+        }
+        response = _client.post(f"{TELEGRAM_API}/setMyCommands", json=payload)
+        return response.json().get("ok", False)
+    except httpx.HTTPError as e:
+        logger.warning(f"setMyCommands failed: {e}")
+        return False

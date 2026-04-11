@@ -12,6 +12,7 @@ from bot.constants import (
     EMOJI_ROCKET, EMOJI_LIGHTNING, EMOJI_SNAIL, EMOJI_FIRE, EMOJI_TROPHY, EMOJI_PACKAGE,
     STEP_ICONS, EMOJI_WHITE_SQUARE, MAX_QUEUE_SIZE, MAX_CONCURRENT_BUILDS,
     FAST_BUILD_THRESHOLD, SLOW_BUILD_THRESHOLD, POPULAR_BUILD_THRESHOLD,
+    BOT_COMMANDS, COMMAND_GROUPS,
 )
 
 
@@ -146,25 +147,6 @@ BUILD_SYNTAX = (
     "<code>/build mkt-care-2025 develop</code>\n"
     "<code>/build mkt-care-2025 mkt-post-2026 mkt-uid-2025</code>"
 )
-
-
-def first_time_build_guide(first_name: str) -> str:
-    return (
-        f"{EMOJI_HAMMER} <b>Chào {escape(first_name)}!</b>\n\n"
-        "Đây là lần đầu bạn dùng <code>/build</code>. Tóm tắt nhanh:\n\n"
-        "<b>Cách dùng:</b>\n"
-        "• <code>/build mkt-care-2025</code> - build 1 dự án\n"
-        "• <code>/build mkt-care-2025 develop</code> - build branch cụ thể\n"
-        "• <code>/build ds1 ds2 ds3</code> - build nhiều dự án song song\n\n"
-        "<b>Các lệnh liên quan:</b>\n"
-        "• <code>/queue</code> - xem hàng đợi\n"
-        "• <code>/status</code> - xem build đang chạy\n"
-        "• <code>/cancel &lt;id&gt;</code> - huỷ build trong queue\n"
-        "• <code>/retry &lt;id&gt;</code> - retry build thất bại\n"
-        "• <code>/log &lt;id&gt;</code> - xem log\n"
-        "• <code>/build_history</code> - lịch sử build\n\n"
-        f"{EMOJI_HOURGLASS} Build đang được xử lý..."
-    )
 
 
 def build_project_not_found(project: str) -> str:
@@ -425,37 +407,29 @@ def build_unauth_success(user_id: str) -> str:
 
 # ============ HELP / DEBUG ============
 
-HELP_TEXT = """<b>Danh sách lệnh:</b>
+def _build_help_text() -> str:
+    """Build HELP_TEXT động từ BOT_COMMANDS, nhóm theo group."""
+    # Group commands
+    grouped: dict[str, list] = {g: [] for g in COMMAND_GROUPS}
+    for cmd, _short, long_desc, group in BOT_COMMANDS:
+        grouped.setdefault(group, []).append((cmd, long_desc))
 
-<b>Chung:</b>
-/help - Hiển thị danh sách lệnh này
-/health - Kiểm tra sức khoẻ hệ thống
+    lines = ["<b>Danh sách lệnh:</b>"]
+    for group in COMMAND_GROUPS:
+        items = grouped.get(group)
+        if not items:
+            continue
+        lines.append("")
+        lines.append(f"<b>{group}:</b>")
+        # Báo cáo group có thêm dòng đặc biệt về "date:"
+        if group == "Báo cáo":
+            lines.append("<code>date: ...</code> - Gửi báo cáo trong report topic (tự động follow)")
+        for cmd, long_desc in items:
+            lines.append(f"/{cmd} - {long_desc}")
+    return "\n".join(lines)
 
-<b>Báo cáo:</b>
-<code>date: ...</code> - Gửi báo cáo trong report topic (tự động follow)
-/export - Xuất báo cáo hôm nay ra file
 
-<b>Thành viên:</b>
-/follow - Đăng ký nhận thông báo (tự động khi nộp báo cáo)
-/unfollow - Huỷ đăng ký
-/all <code>&lt;nội dung&gt;</code> - Gửi thông báo tới tất cả người đã follow
-
-<b>Build:</b>
-/build <code>&lt;dự án&gt;</code> - Build 1 dự án (branch main)
-/build <code>&lt;dự án&gt; &lt;branch&gt;</code> - Build 1 dự án với branch cụ thể
-/build <code>&lt;ds 1&gt; &lt;ds 2&gt; ...</code> - Build nhiều dự án song song
-/retry <code>&lt;id&gt;</code> - Retry 1 build đã thất bại
-/cancel <code>&lt;id&gt;</code> - Huỷ build trong hàng đợi
-/queue - Xem hàng đợi build
-/status - Xem build đang chạy
-/log <code>&lt;id&gt;</code> - Xem 40 dòng log cuối của build
-/build_history - Lịch sử 10 build gần đây
-/stats - Thống kê build (tổng, theo project, top users)
-
-<b>Admin:</b>
-/debug - Trạng thái hệ thống (Redis, reports, quyền)
-/build_auth <code>&lt;user_id&gt;</code> - Cấp quyền build cho user
-/build_unauth <code>&lt;user_id&gt;</code> - Xoá quyền build"""
+HELP_TEXT = _build_help_text()
 
 
 def debug_info(redis_ok: bool, topic_id, build_topic_id, thread_id,

@@ -9,7 +9,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from bot.config import validate_config, GROUP_CHAT_ID, TOPIC_ID, WEEKLY_TOPIC_ID, BUILD_TOPIC_ID
 from bot.store import db, get_today_reports
-from bot.telegram import delete_webhook, send_telegram_message
+from bot.constants import BOT_COMMANDS
+from bot.telegram import delete_webhook, send_telegram_message, set_my_commands
 from bot.parser import build_summary_message
 from bot import messages
 from bot.startup import cleanup_orphan_builds
@@ -125,6 +126,13 @@ def main():
     # Delete webhook (để long polling hoạt động)
     logger.info("Deleting webhook...")
     delete_webhook()
+
+    # Đăng ký bot commands (hiện menu "/" trong Telegram)
+    logger.info("Registering bot commands...")
+    if set_my_commands(BOT_COMMANDS):
+        logger.info(f"Registered {len(BOT_COMMANDS)} commands")
+    else:
+        logger.warning("Failed to register commands")
 
     # Cleanup orphan builds từ lần chạy trước (nếu bot crash)
     logger.info("Cleaning up orphan builds...")
