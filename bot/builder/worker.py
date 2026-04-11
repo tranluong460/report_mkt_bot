@@ -5,13 +5,18 @@ import os
 import threading
 from datetime import datetime
 
+import time
+
 from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID, BUILD_LOG_DIR
-from bot.constants import STEP_ICONS, MAX_CONCURRENT_BUILDS
+from bot.constants import STEP_ICONS, MAX_CONCURRENT_BUILDS, EDIT_THROTTLE_SECONDS
 from bot.telegram import (
     send_telegram_message, edit_message_caption, send_document,
     edit_message_media, delete_message,
 )
-from bot.store import save_build_record, get_today_reports
+from bot.store import (
+    save_build_record, get_today_reports,
+    register_active_build, unregister_active_build,
+)
 from bot.parser import get_project_done_items
 from bot import messages
 from bot.builder.queue import BuildQueue, BuildJob
@@ -60,21 +65,44 @@ class BuildWorker:
         # Gửi placeholder vào LOG topic
         log_msg_id = self._send_log_placeholder(chat_id, log_thread_id, job)
 
-        # Callback cập nhật tiến độ
+        # Đăng ký active build để cleanup nếu restart
+        register_active_build(job.build_id, {
+            "chat_id": chat_id,
+            "build_msg_id": job.message_id,
+            "log_msg_id": log_msg_id,
+            "log_thread_id": log_thread_id,
+            "build_thread_id": build_thread_id,
+            "project": job.project,
+            "branch": job.branch,
+        })
+
+        # Callback cập nhật tiến độ - throttle tối thiểu EDIT_THROTTLE_SECONDS
         step_status: list[tuple[str, str]] = []
         build_start = datetime.now(VN_TZ)
+        last_edit = [0.0]  # dùng list để mutable trong closure
 
         def on_step(current: int, total: int, label: str, status: str):
             while len(step_status) < total:
                 step_status.append(("", "pending"))
             step_status[current - 1] = (label, status)
-            if log_msg_id:
-                elapsed = _fmt_duration((datetime.now(VN_TZ) - build_start).total_seconds())
-                msg = messages.build_log_header(
-                    job.build_id, job.project, job.branch, job.user_name,
-                    elapsed, step_status, total,
-                )
-                edit_message_caption(chat_id, log_msg_id, msg)
+
+            if not log_msg_id:
+                return
+
+            # Throttle: chỉ edit nếu đã qua EDIT_THROTTLE_SECONDS kể từ lần cuối
+            # Luôn edit khi status = "done" ở step cuối (để thấy hoàn thành)
+            now = time.time()
+            is_last_step_done = (current == total and status == "done")
+            if not is_last_step_done and now - last_edit[0] < EDIT_THROTTLE_SECONDS:
+                return
+            last_edit[0] = now
+
+            elapsed = _fmt_duration((datetime.now(VN_TZ) - build_start).total_seconds())
+            msg = messages.build_log_header(
+                job.build_id, job.project, job.branch, job.user_name,
+                elapsed, step_status, total,
+            )
+            edit_message_caption(chat_id, log_msg_id, msg)
 
         # Chạy build
         result = execute_build(job.project, job.branch, job.build_id, on_step=on_step)
@@ -96,6 +124,9 @@ class BuildWorker:
         # Xoá message /build của user
         if job.command_message_id:
             delete_message(chat_id, job.command_message_id)
+
+        # Unregister active build
+        unregister_active_build(job.build_id)
 
     # ===== Helpers =====
 

@@ -10,7 +10,7 @@ import redis
 from bot.config import KV_REDIS_URL, VN_TZ
 from bot.constants import (
     KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_AUTH, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
-    TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
+    KEY_BUILD_ACTIVE, TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
 )
 
 logger = logging.getLogger("bot.store")
@@ -115,3 +115,31 @@ def get_recent_builds(count: int = 10) -> list:
     """Lấy N builds gần nhất từ list."""
     data = db.lrange(KEY_BUILDS_RECENT, 0, count - 1)
     return [json.loads(item) for item in data] if data else []
+
+
+# ============ ACTIVE BUILDS (để cleanup orphan messages khi restart) ============
+
+@_with_redis(None)
+def register_active_build(build_id: int, info: dict) -> None:
+    """Lưu thông tin build đang active (pending hoặc running).
+    info gồm: chat_id, build_msg_id, log_msg_id, log_thread_id, project, branch."""
+    db.hset(KEY_BUILD_ACTIVE, str(build_id), json.dumps(info))
+
+
+@_with_redis(None)
+def unregister_active_build(build_id: int) -> None:
+    """Xoá build khỏi active (khi đã hoàn thành)."""
+    db.hdel(KEY_BUILD_ACTIVE, str(build_id))
+
+
+@_with_redis({})
+def get_all_active_builds() -> dict:
+    """Lấy tất cả active builds. Dùng khi startup để cleanup."""
+    data = db.hgetall(KEY_BUILD_ACTIVE)
+    return {k.decode(): json.loads(v) for k, v in data.items()} if data else {}
+
+
+@_with_redis(None)
+def clear_active_builds() -> None:
+    """Xoá toàn bộ active builds. Dùng sau khi cleanup startup."""
+    db.delete(KEY_BUILD_ACTIVE)

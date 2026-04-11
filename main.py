@@ -12,6 +12,7 @@ from bot.store import db, get_today_reports
 from bot.telegram import delete_webhook, send_telegram_message
 from bot.parser import build_summary_message
 from bot import messages
+from bot.startup import cleanup_orphan_builds
 from bot.builder.queue import BuildQueue
 from bot.builder.worker import BuildWorker
 from bot.poller import run_polling
@@ -90,6 +91,10 @@ def main():
     # Delete webhook (để long polling hoạt động)
     logger.info("Deleting webhook...")
     delete_webhook()
+
+    # Cleanup orphan builds từ lần chạy trước (nếu bot crash)
+    logger.info("Cleaning up orphan builds...")
+    cleanup_orphan_builds()
 
     # Start scheduler
     scheduler = setup_scheduler()

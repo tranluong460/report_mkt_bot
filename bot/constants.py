@@ -28,6 +28,7 @@ KEY_REPORT_PREFIX = "reports"            # Hash: reports:YYYY-MM-DD -> user_id -
 KEY_BUILD_AUTH = "build:authorized"      # Set: user_id
 KEY_BUILD_COUNTER = "build:counter"      # Int: auto-increment
 KEY_BUILDS_RECENT = "builds:recent"      # List: JSON của 20 builds gần nhất
+KEY_BUILD_ACTIVE = "build:active"        # Hash: build_id -> JSON {chat_id, message_ids, project, branch}
 
 # --- TTL (giây) ---
 TTL_REPORT = 172800          # 2 ngày
@@ -41,6 +42,7 @@ MAX_QUEUE_SIZE = 10
 MAX_CONCURRENT_BUILDS = 5    # Số build chạy song song (khác project)
 BUILD_TIMEOUT = 1800         # 30 phút
 REDIS_TIMEOUT = 5
+EDIT_THROTTLE_SECONDS = 2    # Tối thiểu giữa 2 lần edit cùng 1 message
 
 # --- Build steps (template, {branch} sẽ thay branch thực tế) ---
 BUILD_STEPS = [

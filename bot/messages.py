@@ -78,8 +78,14 @@ BUILD_NOT_IN_TOPIC = "Lệnh /build chỉ dùng được trong Build topic."
 BUILD_NO_AUTH = "Bạn chưa được cấp quyền build. Liên hệ admin dùng /build_auth."
 
 BUILD_SYNTAX = (
-    "<b>Cú pháp:</b> <code>/build &lt;tên dự án&gt; [branch]</code>\n"
-    "Ví dụ: <code>/build mkt-care-2025</code>"
+    "<b>Cú pháp:</b>\n"
+    "<code>/build &lt;dự án&gt;</code> - build 1 dự án (branch main)\n"
+    "<code>/build &lt;dự án&gt; &lt;branch&gt;</code> - build 1 dự án với branch cụ thể\n"
+    "<code>/build &lt;dự án 1&gt; &lt;dự án 2&gt; ...</code> - build nhiều dự án (tất cả branch main)\n\n"
+    "Ví dụ:\n"
+    "<code>/build mkt-care-2025</code>\n"
+    "<code>/build mkt-care-2025 develop</code>\n"
+    "<code>/build mkt-care-2025 mkt-post-2026 mkt-uid-2025</code>"
 )
 
 
@@ -161,6 +167,14 @@ def latest_yml_caption(build_id: int, filename: str) -> str:
 
 def placeholder_log_content(build_id: int, project: str, branch: str) -> str:
     return f"Build #{build_id} - {project} ({branch}) - đang chờ...\n"
+
+
+def build_interrupted(build_id: int, project: str, branch: str) -> str:
+    return (
+        f"{EMOJI_WARNING} <b>Build #{build_id} BỊ GIÁN ĐOẠN</b>\n"
+        f"Dự án: <code>{escape(project)}</code> | Branch: <code>{escape(branch)}</code>\n"
+        f"Bot đã restart. Vui lòng gửi lại lệnh /build để chạy lại."
+    )
 
 
 # ============ CANCEL ============

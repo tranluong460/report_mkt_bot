@@ -3,8 +3,8 @@
 import os
 
 from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
-from bot.store import get_build_authorized, next_build_id, get_recent_builds
-from bot.telegram import send_telegram_message, send_document, edit_message_media
+from bot.store import get_build_authorized, next_build_id, get_recent_builds, register_active_build
+from bot.telegram import send_telegram_message, send_document, edit_message_media, delete_message
 from bot import messages
 from bot.builder.queue import BuildQueue, BuildJob
 from bot.builder.executor import validate_project, ensure_log_dir, get_log_tail
@@ -23,24 +23,38 @@ def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, buil
     if not _check_build_auth(chat_id, thread_id, user_id):
         return
 
-    parsed = _parse_build_args(chat_id, thread_id, text)
-    if not parsed:
-        return
-    project, branch = parsed
-
-    if not _validate_project_exists(chat_id, thread_id, project):
+    # Parse args: trả về list tuple (project, branch)
+    jobs_spec = _parse_build_args(chat_id, thread_id, text)
+    if not jobs_spec:
         return
 
+    # Multi-build: xoá command message ngay sau khi parse OK (không cần chờ)
+    # Single-build: để worker xoá sau khi build xong
+    is_multi = len(jobs_spec) > 1
+    if is_multi:
+        delete_message(chat_id, message_id)
+        cmd_msg_id = None
+    else:
+        cmd_msg_id = message_id
+
+    for project, branch in jobs_spec:
+        _enqueue_build(chat_id, thread_id, cmd_msg_id, user_id, first_name,
+                       project, branch, build_queue)
+
+
+def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
+                   project, branch, build_queue) -> bool:
+    """Tạo 1 build job và thêm vào queue. Trả về True nếu thành công."""
     build_id = next_build_id()
     if build_id == 0:
         _send(chat_id, messages.BUILD_REDIS_ERROR, thread_id)
-        return
+        return False
 
     job = BuildJob(
         build_id=build_id, project=project, branch=branch,
         user_id=user_id, user_name=first_name,
         chat_id=chat_id, thread_id=thread_id,
-        command_message_id=message_id,
+        command_message_id=command_message_id,
     )
 
     placeholder_path = _create_placeholder(build_id, project, branch)
@@ -52,6 +66,19 @@ def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, buil
             edit_message_media(chat_id, job.message_id, placeholder_path, messages.BUILD_QUEUE_FULL)
         else:
             _send(chat_id, messages.BUILD_QUEUE_FULL, thread_id)
+        return False
+
+    # Register active build ngay từ lúc pending (để cleanup nếu restart lúc còn pending)
+    register_active_build(build_id, {
+        "chat_id": chat_id,
+        "build_msg_id": job.message_id,
+        "log_msg_id": None,
+        "log_thread_id": None,
+        "build_thread_id": thread_id,
+        "project": project,
+        "branch": branch,
+    })
+    return True
 
 
 # ===== Validation helpers =====
@@ -71,21 +98,48 @@ def _check_build_auth(chat_id, thread_id, user_id) -> bool:
     return True
 
 
-def _parse_build_args(chat_id, thread_id, text):
-    parts = text.strip().split()
-    if len(parts) < 2:
+def _parse_build_args(chat_id, thread_id, text) -> list | None:
+    """Parse /build args. Trả về list (project, branch) hoặc None nếu lỗi.
+
+    Rules:
+    - /build p1                → [(p1, main)]
+    - /build p1 branch         → [(p1, branch)]  nếu branch KHÔNG phải project
+    - /build p1 p2             → [(p1, main), (p2, main)]  nếu p2 LÀ project
+    - /build p1 p2 p3          → [(p1, main), (p2, main), (p3, main)]
+    """
+    parts = text.strip().split()[1:]  # bỏ /build
+    if not parts:
         _send(chat_id, messages.BUILD_SYNTAX, thread_id)
         return None
-    project = parts[1]
-    branch = parts[2] if len(parts) > 2 else "main"
-    return project, branch
 
+    # Case 1: chỉ 1 arg → single project
+    if len(parts) == 1:
+        project = parts[0]
+        if validate_project(project):
+            _send(chat_id, messages.build_project_not_found(project), thread_id)
+            return None
+        return [(project, "main")]
 
-def _validate_project_exists(chat_id, thread_id, project) -> bool:
-    if validate_project(project):
-        _send(chat_id, messages.build_project_not_found(project), thread_id)
-        return False
-    return True
+    # Case 2: 2 args → kiểm tra arg2 là project hay branch
+    if len(parts) == 2:
+        first, second = parts
+        if validate_project(first):
+            _send(chat_id, messages.build_project_not_found(first), thread_id)
+            return None
+        # arg2 là project hợp lệ → multi-build
+        if not validate_project(second):
+            return [(first, "main"), (second, "main")]
+        # arg2 không phải project → branch
+        return [(first, second)]
+
+    # Case 3: 3+ args → tất cả đều phải là project
+    jobs = []
+    for p in parts:
+        if validate_project(p):
+            _send(chat_id, messages.build_project_not_found(p), thread_id)
+            return None
+        jobs.append((p, "main"))
+    return jobs
 
 
 def _create_placeholder(build_id, project, branch) -> str:
