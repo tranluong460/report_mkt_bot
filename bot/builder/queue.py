@@ -18,8 +18,9 @@ class BuildJob:
     user_name: str
     chat_id: int
     thread_id: int | None
-    message_id: int | None = None    # message zip
-    message_id_2: int | None = None  # message yml (nếu dùng)
+    message_id: int | None = None          # message placeholder (document)
+    message_id_2: int | None = None        # backup (nếu dùng)
+    command_message_id: int | None = None  # message /build của user (sẽ xoá sau khi build xong)
     created_at: str = field(
         default_factory=lambda: datetime.now(VN_TZ).strftime("%d/%m/%Y %H:%M:%S")
     )

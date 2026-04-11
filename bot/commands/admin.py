@@ -27,7 +27,7 @@ def handle_debug(chat_id, thread_id, user_id):
     redis_ok = db is not None
     reports = get_today_reports() if redis_ok else {}
     today = datetime.now(VN_TZ).strftime("%Y-%m-%d")
-    reporters = [r.get("reporter", uid) for uid, r in reports.items()]
+    reporters = [r.get("name", uid) for uid, r in reports.items()]
     authorized = get_build_authorized()
 
     msg = messages.debug_info(

@@ -23,15 +23,18 @@ STEP_ICONS = {
 }
 
 # --- Redis keys ---
-KEY_MEMBERS = "members"
-KEY_REPORT_PREFIX = "reports"
-KEY_BUILD_AUTH = "build:authorized"
-KEY_BUILD_COUNTER = "build:counter"
-KEY_BUILD_PREFIX = "build"
+KEY_MEMBERS = "members"                  # Hash: user_id -> {first_name, username}
+KEY_REPORT_PREFIX = "reports"            # Hash: reports:YYYY-MM-DD -> user_id -> report
+KEY_BUILD_AUTH = "build:authorized"      # Set: user_id
+KEY_BUILD_COUNTER = "build:counter"      # Int: auto-increment
+KEY_BUILDS_RECENT = "builds:recent"      # List: JSON của 20 builds gần nhất
 
 # --- TTL (giây) ---
 TTL_REPORT = 172800          # 2 ngày
-TTL_BUILD_RECORD = 259200    # 3 ngày
+TTL_BUILDS_RECENT = 604800   # 7 ngày
+
+# --- Số lượng builds lưu trong list ---
+MAX_RECENT_BUILDS = 20
 
 # --- Build ---
 MAX_QUEUE_SIZE = 5

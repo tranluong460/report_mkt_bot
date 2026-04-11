@@ -89,6 +89,10 @@ class BuildWorker:
         # Cập nhật BUILD topic
         self._update_build_topic(chat_id, build_thread_id, job, result, duration_str)
 
+        # Xoá message /build của user
+        if job.command_message_id:
+            delete_message(chat_id, job.command_message_id)
+
     # ===== Helpers =====
 
     def _send_log_placeholder(self, chat_id: int, thread_id: int, job: BuildJob) -> int | None:
@@ -102,14 +106,15 @@ class BuildWorker:
         return result["result"]["message_id"] if result.get("ok") else None
 
     def _save_record(self, job: BuildJob, result: dict, duration_str: str):
-        save_build_record(job.build_id, {
-            "pj": job.project,
-            "b": job.branch,
-            "u": job.user_name,
-            "ok": result["success"],
-            "d": duration_str,
-            "e": result["error"],
-            "t": datetime.now(VN_TZ).strftime("%m/%d %H:%M"),
+        save_build_record({
+            "id": job.build_id,
+            "project": job.project,
+            "branch": job.branch,
+            "user_name": job.user_name,
+            "success": result["success"],
+            "duration": duration_str,
+            "error": result["error"],
+            "finished_at": datetime.now(VN_TZ).strftime("%d/%m %H:%M"),
         })
 
     def _finalize_step_status(self, step_status: list, result: dict):

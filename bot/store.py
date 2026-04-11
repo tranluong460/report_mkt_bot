@@ -9,8 +9,8 @@ import redis
 
 from bot.config import KV_REDIS_URL, VN_TZ
 from bot.constants import (
-    KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_AUTH, KEY_BUILD_COUNTER, KEY_BUILD_PREFIX,
-    TTL_REPORT, TTL_BUILD_RECORD, REDIS_TIMEOUT,
+    KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_AUTH, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
+    TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
 )
 
 logger = logging.getLogger("bot.store")
@@ -38,40 +38,46 @@ def _with_redis(default):
     return decorator
 
 
-def _today_key() -> str:
+def _today_report_key() -> str:
     today = datetime.now(VN_TZ).strftime("%Y-%m-%d")
     return f"{KEY_REPORT_PREFIX}:{today}"
 
 
-# ============ MEMBERS ============
+# ============ MEMBERS (Hash) ============
 
 @_with_redis({})
-def kv_get() -> dict:
-    data = db.get(KEY_MEMBERS)
-    return json.loads(data) if data else {}
+def get_members() -> dict:
+    """Trả về dict {user_id: {first_name, username}}."""
+    data = db.hgetall(KEY_MEMBERS)
+    return {k.decode(): json.loads(v) for k, v in data.items()} if data else {}
 
 
 @_with_redis(None)
-def kv_set(members: dict) -> None:
-    db.set(KEY_MEMBERS, json.dumps(members))
+def add_member(user_id: str, first_name: str, username: str) -> None:
+    db.hset(KEY_MEMBERS, user_id, json.dumps({"first_name": first_name, "username": username}))
 
 
-# ============ REPORTS (Redis Hash - atomic) ============
+@_with_redis(None)
+def remove_member(user_id: str) -> None:
+    db.hdel(KEY_MEMBERS, user_id)
+
+
+# ============ REPORTS (Hash - atomic) ============
 
 @_with_redis({})
 def get_today_reports() -> dict:
-    data = db.hgetall(_today_key())
+    data = db.hgetall(_today_report_key())
     return {k.decode(): json.loads(v) for k, v in data.items()} if data else {}
 
 
 @_with_redis(None)
 def save_report(user_id: str, report: dict) -> None:
-    key = _today_key()
+    key = _today_report_key()
     db.hset(key, user_id, json.dumps(report))
     db.expire(key, TTL_REPORT)
 
 
-# ============ BUILD AUTH ============
+# ============ BUILD AUTH (Set) ============
 
 @_with_redis(set())
 def get_build_authorized() -> set:
@@ -89,7 +95,7 @@ def remove_build_authorized(user_id: str) -> None:
     db.srem(KEY_BUILD_AUTH, user_id)
 
 
-# ============ BUILD RECORDS ============
+# ============ BUILD RECORDS (List) ============
 
 @_with_redis(0)
 def next_build_id() -> int:
@@ -97,28 +103,15 @@ def next_build_id() -> int:
 
 
 @_with_redis(None)
-def save_build_record(build_id: int, record: dict) -> None:
-    key = f"{KEY_BUILD_PREFIX}:{build_id}"
-    db.set(key, json.dumps(record, separators=(",", ":")), ex=TTL_BUILD_RECORD)
-
-
-@_with_redis(None)
-def get_build_record(build_id: int) -> dict | None:
-    key = f"{KEY_BUILD_PREFIX}:{build_id}"
-    data = db.get(key)
-    return json.loads(data) if data else None
+def save_build_record(record: dict) -> None:
+    """Push build vào đầu list, giữ tối đa MAX_RECENT_BUILDS."""
+    db.lpush(KEY_BUILDS_RECENT, json.dumps(record, ensure_ascii=False))
+    db.ltrim(KEY_BUILDS_RECENT, 0, MAX_RECENT_BUILDS - 1)
+    db.expire(KEY_BUILDS_RECENT, TTL_BUILDS_RECENT)
 
 
 @_with_redis([])
 def get_recent_builds(count: int = 10) -> list:
-    counter = db.get(KEY_BUILD_COUNTER)
-    if not counter:
-        return []
-    latest = int(counter)
-    builds = []
-    for i in range(latest, max(0, latest - count), -1):
-        record = get_build_record(i)
-        if record:
-            record["id"] = i
-            builds.append(record)
-    return builds
+    """Lấy N builds gần nhất từ list."""
+    data = db.lrange(KEY_BUILDS_RECENT, 0, count - 1)
+    return [json.loads(item) for item in data] if data else []

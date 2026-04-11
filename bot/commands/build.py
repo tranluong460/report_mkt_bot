@@ -38,6 +38,7 @@ def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, buil
         build_id=build_id, project=project, branch=branch,
         user_id=user_id, user_name=first_name,
         chat_id=chat_id, thread_id=thread_id,
+        command_message_id=message_id,  # message /build của user
     )
 
     # Gửi placeholder document, lưu message_id để worker edit sau
@@ -232,15 +233,16 @@ def handle_build_history(chat_id, thread_id):
 
     lines = ["<b>Lịch sử build gần đây:</b>", ""]
     for b in builds:
-        icon = EMOJI_CHECK if b.get("ok") else EMOJI_CROSS
+        icon = EMOJI_CHECK if b.get("success") else EMOJI_CROSS
         line = (
-            f"{icon} <b>#{b['id']}</b> {escape(b.get('pj', '?'))} ({b.get('b', '?')}) | "
-            f"{b.get('d', '?')} | {escape(b.get('u', '?'))}"
+            f"{icon} <b>#{b['id']}</b> {escape(b.get('project', '?'))} "
+            f"({b.get('branch', '?')}) | {b.get('duration', '?')} | "
+            f"{escape(b.get('user_name', '?'))}"
         )
-        if b.get("t"):
-            line += f" | {b['t']}"
-        if not b.get("ok") and b.get("e"):
-            line += f"\n     <i>{escape(str(b['e'])[:80])}</i>"
+        if b.get("finished_at"):
+            line += f" | {b['finished_at']}"
+        if not b.get("success") and b.get("error"):
+            line += f"\n     <i>{escape(str(b['error'])[:80])}</i>"
         lines.append(line)
 
     send_telegram_message(chat_id, "\n".join(lines), thread_id, parse_mode="HTML")

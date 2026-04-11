@@ -18,7 +18,6 @@ def handle_report(chat_id, message_id, thread_id, text, user_id, first_name) -> 
     if text.strip().lower().startswith("date:"):
         report = parse_report(text)
         if report["date"] and report["name"] and report["projects"]:
-            report["reporter"] = first_name
             save_report(user_id, report)
             react_to_message(chat_id, message_id, EMOJI_THUMBS_UP)
         else:
