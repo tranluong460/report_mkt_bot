@@ -141,7 +141,7 @@ def main():
     # Start scheduler
     scheduler = setup_scheduler()
     scheduler.start()
-    logger.info("Scheduler: daily 16:30 VN (T2-T6) / 11:00 VN (T7), weekly 09:00 VN (T7), summary 23:00 VN (T2-T7)")
+    logger.info("Scheduler: daily 16:00 VN (T2-T6) / 10:00 VN (T7), weekly 09:00 VN (T7), missing alert 21:00 VN (T2-T6) / 11:00 VN (T7), summary 23:00 VN (T2-T7)")
 
     # Start build worker
     build_queue = BuildQueue()
