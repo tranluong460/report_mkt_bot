@@ -305,7 +305,9 @@ HELP_TEXT = """<b>Danh sách lệnh:</b>
 /all <code>&lt;nội dung&gt;</code> - Gửi thông báo tới tất cả người đã follow
 
 <b>Build:</b>
-/build <code>&lt;dự án&gt; [branch]</code> - Yêu cầu build
+/build <code>&lt;dự án&gt;</code> - Build 1 dự án (branch main)
+/build <code>&lt;dự án&gt; &lt;branch&gt;</code> - Build 1 dự án với branch cụ thể
+/build <code>&lt;ds 1&gt; &lt;ds 2&gt; ...</code> - Build nhiều dự án song song
 /cancel <code>&lt;id&gt;</code> - Huỷ build trong hàng đợi
 /queue - Xem hàng đợi build
 /status - Xem build đang chạy
