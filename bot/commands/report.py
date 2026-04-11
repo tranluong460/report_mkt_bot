@@ -1,14 +1,17 @@
+"""Report handler: parse và lưu báo cáo trong report topic."""
+
 from bot.config import TOPIC_ID
+from bot.constants import EMOJI_THUMBS_UP, EMOJI_THINKING
 from bot.parser import parse_report
 from bot.store import save_report
 from bot.telegram import react_to_message, send_telegram_message
+from bot import messages
 
 
-def handle_report(chat_id: int, message_id: int, thread_id, text: str, user_id: str, first_name: str) -> bool:
-    """Handle report messages in the report topic. Returns True if handled."""
+def handle_report(chat_id, message_id, thread_id, text, user_id, first_name) -> bool:
+    """Xử lý message trong report topic. Trả về True nếu đã handle."""
     if not thread_id or str(thread_id) != str(TOPIC_ID):
         return False
-
     if not text.strip():
         return False
 
@@ -17,15 +20,11 @@ def handle_report(chat_id: int, message_id: int, thread_id, text: str, user_id: 
         if report["date"] and report["name"] and report["projects"]:
             report["reporter"] = first_name
             save_report(user_id, report)
-            react_to_message(chat_id, message_id, "\U0001f44d")
+            react_to_message(chat_id, message_id, EMOJI_THUMBS_UP)
         else:
-            react_to_message(chat_id, message_id, "\U0001f914")
-            send_telegram_message(
-                chat_id,
-                "Sai format. Cần có: `date:`, `name:`, và ít nhất 1 project `[A] Tên dự án`",
-                thread_id,
-            )
+            react_to_message(chat_id, message_id, EMOJI_THINKING)
+            send_telegram_message(chat_id, messages.report_format_help(), thread_id)
     else:
-        react_to_message(chat_id, message_id, "\U0001f914")
+        react_to_message(chat_id, message_id, EMOJI_THINKING)
 
     return True

@@ -1,13 +1,25 @@
+"""Parser báo cáo - chuyển text format thành dict."""
+
 import re
 from datetime import datetime
 
 from bot.config import VN_TZ
+from bot.constants import REPORT_SECTIONS, PROJECT_SECTIONS, GLOBAL_SECTIONS
 
 
 def parse_report(text: str) -> dict:
-    """Parse a structured report message into a dict."""
-    lines = text.split("\n")
-    result: dict = {
+    """Parse text báo cáo thành dict. Format:
+
+        date: YYYY-MM-DD
+        name: Tên
+        [A] Tên dự án
+        Done:
+        - item1
+        Doing:
+        - item2
+        ...
+    """
+    result = {
         "date": None,
         "name": None,
         "projects": [],
@@ -15,9 +27,9 @@ def parse_report(text: str) -> dict:
         "plan": [],
     }
     current_project = None
-    current_section = None  # 'done' | 'doing' | 'issue' | 'support' | 'plan'
+    current_section = None
 
-    for raw in lines:
+    for raw in text.split("\n"):
         line = raw.strip()
 
         if line.lower().startswith("date:"):
@@ -28,56 +40,47 @@ def parse_report(text: str) -> dict:
             result["name"] = line[5:].strip()
             continue
 
-        # Project header: [A] Tên dự án  or  [B] Tên dự án
+        # Project header: [A] Tên dự án
         m = re.match(r"^\[.+?\]\s+(.+)", line)
         if m:
             current_project = {
                 "name": m.group(1).strip(),
-                "done": [],
-                "doing": [],
-                "issue": [],
+                "done": [], "doing": [], "issue": [],
             }
             result["projects"].append(current_project)
             current_section = None
             continue
 
-        # Section headers (case-insensitive, with or without colon)
+        # Section header (case-insensitive, có thể có :)
         lower = line.lower().rstrip(":")
-        if lower in ("done", "doing", "issue", "support", "plan"):
+        if lower in REPORT_SECTIONS:
             current_section = lower
-            if lower in ("support", "plan"):
+            if lower in GLOBAL_SECTIONS:
                 current_project = None
             continue
 
-        # Handle both "- item" and "-item" and bare "-"
+        # Item "- xxx"
         if line.startswith("-"):
             item = line[1:].strip()
             if not item:
                 continue
-            if current_section == "done" and current_project is not None:
-                current_project["done"].append(item)
-            elif current_section == "doing" and current_project is not None:
-                current_project["doing"].append(item)
-            elif current_section == "issue" and current_project is not None:
-                current_project["issue"].append(item)
-            elif current_section == "support":
-                result["support"].append(item)
-            elif current_section == "plan":
-                result["plan"].append(item)
+            if current_section in PROJECT_SECTIONS and current_project is not None:
+                current_project[current_section].append(item)
+            elif current_section in GLOBAL_SECTIONS:
+                result[current_section].append(item)
 
     return result
 
 
 def get_project_done_items(reports: dict, project_name: str) -> list:
-    """Lấy danh sách done items của 1 project cụ thể từ reports.
-    Match theo tên project (case-insensitive, substring)."""
+    """Lấy done items của 1 project từ tất cả reports hôm nay.
+    Match theo tên project (case-insensitive, substring 2 chiều)."""
     target = project_name.lower().strip()
     items = []
     seen = set()
     for report in reports.values():
         for proj in report.get("projects", []):
             name = proj.get("name", "").lower().strip()
-            # Match nếu tên project chứa target hoặc ngược lại
             if target in name or name in target:
                 for done in proj.get("done", []):
                     if done and done not in seen:
@@ -87,19 +90,17 @@ def get_project_done_items(reports: dict, project_name: str) -> list:
 
 
 def build_summary_message(reports: dict) -> str:
-    """Aggregate done items by project name across all user reports."""
+    """Gộp done items theo project, format tổng hợp ngày."""
     if not reports:
         return "Chưa có báo cáo nào hôm nay."
 
-    projects: dict = {}
+    projects: dict[str, list] = {}
     for report in reports.values():
         for proj in report.get("projects", []):
             name = proj["name"]
             done_items = [d for d in proj.get("done", []) if d]
             if done_items:
-                if name not in projects:
-                    projects[name] = []
-                projects[name].extend(done_items)
+                projects.setdefault(name, []).extend(done_items)
 
     if not projects:
         return "Chưa có task done nào hôm nay."
