@@ -4,9 +4,9 @@ import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from bot.config import validate_config, GROUP_CHAT_ID, TOPIC_ID, BUILD_TOPIC_ID, VN_TZ
+from bot.config import validate_config, GROUP_CHAT_ID, TOPIC_ID, WEEKLY_TOPIC_ID, BUILD_TOPIC_ID, VN_TZ
 from bot.store import db
-from bot.telegram import delete_webhook, send_telegram_message, get_report_message
+from bot.telegram import delete_webhook, send_telegram_message, get_report_message, get_weekly_report_message
 from bot.parser import build_summary_message
 from bot.store import get_today_reports
 from bot.builder.queue import BuildQueue
@@ -39,6 +39,16 @@ def send_daily_reminder():
         int(GROUP_CHAT_ID),
         get_report_message(),
         int(TOPIC_ID),
+    )
+
+
+def send_weekly_reminder():
+    """Send weekly report reminder. Runs at 16:00 VN Saturday (9:00 UTC)."""
+    logger.info("Sending weekly reminder...")
+    send_telegram_message(
+        int(GROUP_CHAT_ID),
+        get_weekly_report_message(),
+        int(WEEKLY_TOPIC_ID),
     )
 
 
@@ -77,12 +87,18 @@ def main():
     else:
         logger.warning("Failed to delete webhook (may not have been set)")
 
-    # 4. Start scheduler
+    # 4. Start scheduler (UTC)
     scheduler = BackgroundScheduler(timezone="UTC")
-    scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=0)  # 16:00 VN
-    scheduler.add_job(send_daily_summary, "cron", hour=16, minute=0, day_of_week="mon-sat")  # 23:00 VN
+    # Daily reminder: 16:30 VN (09:30 UTC) T2-T6
+    scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=30, day_of_week="mon-fri")
+    # Daily reminder: 11:00 VN (04:00 UTC) T7
+    scheduler.add_job(send_daily_reminder, "cron", hour=4, minute=0, day_of_week="sat")
+    # Weekly reminder: 10:00 VN (03:00 UTC) T7
+    scheduler.add_job(send_weekly_reminder, "cron", hour=3, minute=0, day_of_week="sat")
+    # Daily summary: 23:00 VN (16:00 UTC) T2-T7
+    scheduler.add_job(send_daily_summary, "cron", hour=16, minute=0, day_of_week="mon-sat")
     scheduler.start()
-    logger.info("Scheduler started (reminder: 16:00 VN, summary: 23:00 VN Mon-Sat)")
+    logger.info("Scheduler: daily 16:30 VN (T2-T6) / 11:00 VN (T7), weekly 10:00 VN (T7), summary 23:00 VN (T2-T7)")
 
     # 5. Start build worker
     build_queue = BuildQueue()

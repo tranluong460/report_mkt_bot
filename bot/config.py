@@ -8,6 +8,7 @@ load_dotenv()
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID")
 TOPIC_ID = os.environ.get("TOPIC_ID")
+WEEKLY_TOPIC_ID = os.environ.get("WEEKLY_TOPIC_ID")
 BUILD_TOPIC_ID = os.environ.get("BUILD_TOPIC_ID")
 LOG_TOPIC_ID = os.environ.get("LOG_TOPIC_ID")
 ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
@@ -43,6 +44,7 @@ def validate_config():
         "BOT_TOKEN": BOT_TOKEN,
         "GROUP_CHAT_ID": GROUP_CHAT_ID,
         "TOPIC_ID": TOPIC_ID,
+        "WEEKLY_TOPIC_ID": WEEKLY_TOPIC_ID,
         "BUILD_TOPIC_ID": BUILD_TOPIC_ID,
         "LOG_TOPIC_ID": LOG_TOPIC_ID,
         "ADMIN_USER_ID": ADMIN_USER_ID,

@@ -211,6 +211,22 @@ def get_report_message() -> str:
     )
 
 
+def get_weekly_report_message() -> str:
+    """Tạo message nhắc báo cáo tuần (T2 - T7)."""
+    from datetime import timedelta
+    today = datetime.now(VN_TZ)
+    # Thứ 2 của tuần hiện tại
+    monday = today - timedelta(days=today.weekday())
+    # Thứ 7 của tuần hiện tại
+    saturday = monday + timedelta(days=5)
+    mon_str = monday.strftime("%d/%m/%Y")
+    sat_str = saturday.strftime("%d/%m/%Y")
+    return (
+        f"*\U0001F4CB Nh\u1eafc b\u00e1o c\u00e1o tu\u1ea7n  {mon_str} - {sat_str}*\n\n"
+        "M\u1ecdi ng\u01b0\u1eddi g\u1eedi b\u00e1o c\u00e1o c\u00f4ng vi\u1ec7c h\u00f4m nay v\u00e0o topic n\u00e0y nh\u00e9!"
+    )
+
+
 def escape_markdown(text: str) -> str:
     """Escape Markdown special characters."""
     for ch in ("\\", "_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"):
