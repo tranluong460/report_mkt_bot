@@ -77,43 +77,83 @@ where nssm >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     set NSSM_EXE=nssm
     echo NSSM da co trong PATH
-) else if exist "%NSSM_EXE%" (
-    echo NSSM da co tai %NSSM_EXE%
-) else (
-    echo Tai NSSM...
-    set NSSM_ZIP=%TEMP%\nssm.zip
-    set NSSM_TMP=%TEMP%\nssm-%NSSM_VERSION%
-
-    REM Xoa temp cu
-    if exist "!NSSM_TMP!" rmdir /s /q "!NSSM_TMP!"
-    if exist "!NSSM_ZIP!" del /q "!NSSM_ZIP!"
-
-    REM Tai bang PowerShell
-    powershell -Command "Invoke-WebRequest -Uri '%NSSM_URL%' -OutFile '!NSSM_ZIP!'"
-    if %ERRORLEVEL% neq 0 (
-        echo [ERROR] Khong tai duoc NSSM
-        echo Vui long tai thu cong tu https://nssm.cc/download
-        pause
-        exit /b 1
-    )
-
-    REM Giai nen
-    powershell -Command "Expand-Archive -Path '!NSSM_ZIP!' -DestinationPath '%TEMP%' -Force"
-
-    REM Copy nssm.exe (win64)
-    if exist "%TEMP%\nssm-%NSSM_VERSION%\win64\nssm.exe" (
-        copy /y "%TEMP%\nssm-%NSSM_VERSION%\win64\nssm.exe" "%NSSM_EXE%" >nul
-        echo Copied NSSM to %NSSM_EXE%
-    ) else (
-        echo [ERROR] Khong tim thay nssm.exe sau khi giai nen
-        pause
-        exit /b 1
-    )
-
-    REM Cleanup
-    del /q "!NSSM_ZIP!" 2>nul
-    rmdir /s /q "%TEMP%\nssm-%NSSM_VERSION%" 2>nul
+    goto :nssm_ready
 )
+
+if exist "%NSSM_EXE%" (
+    echo NSSM da co tai %NSSM_EXE%
+    goto :nssm_ready
+)
+
+echo Tai NSSM...
+set NSSM_ZIP=%TEMP%\nssm.zip
+set NSSM_TMP=%TEMP%\nssm-%NSSM_VERSION%
+
+REM Xoa temp cu
+if exist "!NSSM_TMP!" rmdir /s /q "!NSSM_TMP!"
+if exist "!NSSM_ZIP!" del /q "!NSSM_ZIP!"
+
+REM Thu nhieu URL (nssm.cc hay bi down)
+set DOWNLOAD_OK=0
+
+echo Thu nssm.cc...
+powershell -Command "try { Invoke-WebRequest -Uri '%NSSM_URL%' -OutFile '!NSSM_ZIP!' -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop; exit 0 } catch { exit 1 }"
+if %ERRORLEVEL% equ 0 (
+    set DOWNLOAD_OK=1
+    goto :nssm_downloaded
+)
+
+echo Thu GitHub mirror 1...
+powershell -Command "try { Invoke-WebRequest -Uri 'https://github.com/Cthulhu-throwaway/nssm-mirror/releases/download/2.24/nssm-2.24.zip' -OutFile '!NSSM_ZIP!' -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop; exit 0 } catch { exit 1 }"
+if %ERRORLEVEL% equ 0 (
+    set DOWNLOAD_OK=1
+    goto :nssm_downloaded
+)
+
+echo Thu Chocolatey mirror...
+powershell -Command "try { Invoke-WebRequest -Uri 'https://packages.chocolatey.org/NSSM.2.24.0.20180307.nupkg' -OutFile '%TEMP%\nssm.nupkg' -UseBasicParsing -TimeoutSec 30 -ErrorAction Stop; Expand-Archive -Path '%TEMP%\nssm.nupkg' -DestinationPath '%TEMP%\nssm-choco' -Force; exit 0 } catch { exit 1 }"
+if %ERRORLEVEL% equ 0 (
+    if exist "%TEMP%\nssm-choco\tools\nssm.exe" (
+        copy /y "%TEMP%\nssm-choco\tools\nssm.exe" "%NSSM_EXE%" >nul
+        rmdir /s /q "%TEMP%\nssm-choco" 2>nul
+        del /q "%TEMP%\nssm.nupkg" 2>nul
+        echo Copied NSSM tu Chocolatey to %NSSM_EXE%
+        goto :nssm_ready
+    )
+)
+
+REM Khong tai duoc
+echo.
+echo [ERROR] Khong tai duoc NSSM tu bat ky source nao
+echo.
+echo Vui long tai thu cong:
+echo   1. Vao https://nssm.cc/download
+echo   2. Tai nssm-2.24.zip
+echo   3. Giai nen, copy win64\nssm.exe vao:
+echo      %~dp0nssm.exe
+echo   4. Chay lai script
+echo.
+pause
+exit /b 1
+
+:nssm_downloaded
+REM Giai nen file zip
+powershell -Command "Expand-Archive -Path '!NSSM_ZIP!' -DestinationPath '%TEMP%' -Force"
+
+if exist "%TEMP%\nssm-%NSSM_VERSION%\win64\nssm.exe" (
+    copy /y "%TEMP%\nssm-%NSSM_VERSION%\win64\nssm.exe" "%NSSM_EXE%" >nul
+    echo Copied NSSM to %NSSM_EXE%
+) else (
+    echo [ERROR] Khong tim thay nssm.exe sau khi giai nen
+    pause
+    exit /b 1
+)
+
+REM Cleanup
+del /q "!NSSM_ZIP!" 2>nul
+rmdir /s /q "%TEMP%\nssm-%NSSM_VERSION%" 2>nul
+
+:nssm_ready
 echo.
 
 REM ===== Xoa service cu neu co =====
@@ -129,15 +169,25 @@ echo [5/6] Cai dat service %SERVICE_NAME%...
 if %USE_EXE% equ 1 (
     "%NSSM_EXE%" install %SERVICE_NAME% "%APP_PATH%"
 ) else (
-    REM Tim python
-    for /f "delims=" %%i in ('where python') do (
-        set PYTHON_PATH=%%i
-        goto :found_python
+    REM Tim python - skip Microsoft Store stub (fake python)
+    set PYTHON_PATH=
+    for /f "delims=" %%i in ('where python 2^>nul') do (
+        set "LINE=%%i"
+        echo !LINE! | findstr /i "WindowsApps" >nul
+        if errorlevel 1 (
+            if "!PYTHON_PATH!"=="" set "PYTHON_PATH=!LINE!"
+        )
     )
-    echo [ERROR] Khong tim thay python trong PATH
-    pause
-    exit /b 1
-    :found_python
+
+    if "!PYTHON_PATH!"=="" (
+        echo [ERROR] Khong tim thay python that trong PATH
+        echo Luu y: Microsoft Store python stub se bi skip
+        echo Vui long cai Python tu python.org va them vao PATH
+        pause
+        exit /b 1
+    )
+
+    echo Python path: !PYTHON_PATH!
     "%NSSM_EXE%" install %SERVICE_NAME% "!PYTHON_PATH!" "%APP_PATH%"
 )
 
