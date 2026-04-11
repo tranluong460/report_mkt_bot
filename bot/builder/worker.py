@@ -11,7 +11,7 @@ from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID, BUILD
 from bot.constants import STEP_ICONS, MAX_CONCURRENT_BUILDS, EDIT_THROTTLE_SECONDS
 from bot.telegram import (
     send_telegram_message, edit_message_caption, send_document,
-    edit_message_media, delete_message,
+    edit_message_media, delete_message, send_media_group,
 )
 from bot.store import (
     save_build_record, get_today_reports,
@@ -45,12 +45,16 @@ class BuildWorker:
             t.join(timeout=5)
 
     def _run(self):
+        worker_name = threading.current_thread().name
+        logger.info(f"{worker_name} ready")
         while not self._stop.is_set():
             job = self._queue.get(timeout=2.0)
             if job is None:
                 continue
+            logger.info(f"{worker_name} picked up Build #{job.build_id} ({job.project})")
             try:
                 self._process_job(job)
+                logger.info(f"{worker_name} finished Build #{job.build_id}")
             except Exception as e:
                 logger.exception(f"Build #{job.build_id} crashed")
                 self._report_system_error(job, str(e))
@@ -194,21 +198,26 @@ class BuildWorker:
         done_items = get_project_done_items(reports, job.project)
         caption = messages.build_success_caption(job.project, done_items)
 
-        # Edit placeholder → zip thật
-        if build_msg_id and dist["zip"]:
-            edit_message_media(chat_id, build_msg_id, dist["zip"], caption)
-        elif build_msg_id:
-            edit_message_caption(chat_id, build_msg_id, caption)
-        else:
-            send_telegram_message(chat_id, caption, build_thread_id, parse_mode="HTML")
+        files = [f for f in (dist["zip"], dist["latest"]) if f]
 
-        # Gửi latest.yml riêng
-        if dist["latest"]:
-            send_document(
-                chat_id, dist["latest"],
-                caption=messages.latest_yml_caption(job.build_id, os.path.basename(dist['latest'])),
-                thread_id=build_thread_id,
-            )
+        if len(files) >= 2:
+            # Có cả zip + latest → gộp media group, xoá placeholder cũ
+            if build_msg_id:
+                delete_message(chat_id, build_msg_id)
+            send_media_group(chat_id, files, caption=caption, thread_id=build_thread_id)
+        elif len(files) == 1:
+            # Chỉ có 1 file → edit placeholder
+            if build_msg_id:
+                edit_message_media(chat_id, build_msg_id, files[0], caption)
+            else:
+                send_document(chat_id, files[0], caption=caption,
+                              thread_id=build_thread_id, parse_mode="HTML")
+        else:
+            # Không có file nào → edit caption placeholder
+            if build_msg_id:
+                edit_message_caption(chat_id, build_msg_id, caption)
+            else:
+                send_telegram_message(chat_id, caption, build_thread_id, parse_mode="HTML")
 
     def _handle_build_failure(self, chat_id, build_thread_id, build_msg_id, job, result, duration_str):
         logger.info(f"Build #{job.build_id} FAILED: {result['error']}")

@@ -57,15 +57,25 @@ def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
         command_message_id=command_message_id,
     )
 
+    # Check duplicate TRƯỚC khi gửi placeholder (tránh spam message)
+    if build_queue.is_project_active(project):
+        _send(chat_id, messages.build_duplicate(project), thread_id)
+        return False
+
     placeholder_path = _create_placeholder(build_id, project, branch)
     job.message_id = _send_placeholder(chat_id, thread_id, placeholder_path, build_id, project, branch)
 
-    success, _ = build_queue.put(job)
+    success, position = build_queue.put(job)
     if not success:
-        if job.message_id:
-            edit_message_media(chat_id, job.message_id, placeholder_path, messages.BUILD_QUEUE_FULL)
+        if position == -1:
+            # Duplicate (race condition - project vừa được thêm)
+            msg = messages.build_duplicate(project)
         else:
-            _send(chat_id, messages.BUILD_QUEUE_FULL, thread_id)
+            msg = messages.BUILD_QUEUE_FULL
+        if job.message_id:
+            edit_message_media(chat_id, job.message_id, placeholder_path, msg)
+        else:
+            _send(chat_id, msg, thread_id)
         return False
 
     # Register active build ngay từ lúc pending (để cleanup nếu restart lúc còn pending)
@@ -133,8 +143,12 @@ def _parse_build_args(chat_id, thread_id, text) -> list | None:
         return [(first, second)]
 
     # Case 3: 3+ args → tất cả đều phải là project
+    seen = set()
     jobs = []
     for p in parts:
+        if p in seen:
+            continue  # Bỏ qua duplicate
+        seen.add(p)
         if validate_project(p):
             _send(chat_id, messages.build_project_not_found(p), thread_id)
             return None

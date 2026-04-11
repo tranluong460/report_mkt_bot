@@ -45,13 +45,28 @@ class BuildQueue:
         self._pending: list[BuildJob] = []
 
     def put(self, job: BuildJob) -> tuple[bool, int]:
-        """Thêm job. Trả về (success, position trong pending)."""
+        """Thêm job. Trả về (success, position trong pending).
+
+        Nếu project đã trong pending hoặc đang running → reject (duplicate).
+        """
         with self._lock:
             if len(self._pending) >= MAX_QUEUE_SIZE:
                 return False, 0
+            # Kiểm tra duplicate: không cho enqueue project đang pending/running
+            if job.project in self._running:
+                return False, -1
+            if any(p.project == job.project for p in self._pending):
+                return False, -1
             self._pending.append(job)
             self._queue.put(job)
             return True, len(self._pending)
+
+    def is_project_active(self, project: str) -> bool:
+        """True nếu project đang trong pending hoặc đang running."""
+        with self._lock:
+            if project in self._running:
+                return True
+            return any(p.project == project for p in self._pending)
 
     def get(self, timeout: float = 1.0) -> BuildJob | None:
         """Lấy job khả dụng. Nếu project đang bận → bỏ lại, trả None."""

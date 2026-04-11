@@ -73,6 +73,10 @@ def build_queued(build_id: int, project: str, branch: str, position: int) -> str
 
 
 BUILD_QUEUE_FULL = f"Hàng đợi đầy (tối đa {MAX_QUEUE_SIZE}). Vui lòng thử lại sau."
+
+
+def build_duplicate(project: str) -> str:
+    return f"Dự án <code>{escape(project)}</code> đang chạy hoặc trong hàng đợi, không thể thêm lại."
 BUILD_REDIS_ERROR = "Lỗi Redis, không tạo được build ID."
 BUILD_NOT_IN_TOPIC = "Lệnh /build chỉ dùng được trong Build topic."
 BUILD_NO_AUTH = "Bạn chưa được cấp quyền build. Liên hệ admin dùng /build_auth."
