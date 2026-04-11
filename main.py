@@ -93,12 +93,12 @@ def main():
     scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=30, day_of_week="mon-fri")
     # Daily reminder: 11:00 VN (04:00 UTC) T7
     scheduler.add_job(send_daily_reminder, "cron", hour=4, minute=0, day_of_week="sat")
-    # Weekly reminder: 09:52 VN (02:52 UTC) T7
-    scheduler.add_job(send_weekly_reminder, "cron", hour=2, minute=52, day_of_week="sat")
+    # Weekly reminder: 09:00 VN (02:00 UTC) T7
+    scheduler.add_job(send_weekly_reminder, "cron", hour=2, minute=0, day_of_week="sat")
     # Daily summary: 23:00 VN (16:00 UTC) T2-T7
     scheduler.add_job(send_daily_summary, "cron", hour=16, minute=0, day_of_week="mon-sat")
     scheduler.start()
-    logger.info("Scheduler: daily 16:30 VN (T2-T6) / 11:00 VN (T7), weekly 09:52 VN (T7), summary 23:00 VN (T2-T7)")
+    logger.info("Scheduler: daily 16:30 VN (T2-T6) / 11:00 VN (T7), weekly 09:00 VN (T7), summary 23:00 VN (T2-T7)")
 
     # 5. Start build worker
     build_queue = BuildQueue()
