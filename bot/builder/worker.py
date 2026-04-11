@@ -5,7 +5,8 @@ from html import escape
 
 from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID, BUILD_LOG_DIR
 from bot.telegram import send_telegram_message, edit_message, edit_message_caption, send_document, send_media_group, edit_message_media, delete_message
-from bot.store import save_build_record
+from bot.store import save_build_record, get_today_reports
+from bot.parser import get_project_done_items
 from bot.builder.queue import BuildQueue, BuildJob
 from bot.builder.executor import execute_build, get_dist_files, _fmt_duration
 
@@ -162,19 +163,16 @@ class BuildWorker:
             dist = get_dist_files(job.project)
             logger.info(f"[BUILD] #{job.build_id} dist files: zip={dist['zip']} | latest={dist['latest']}")
 
-            zip_name = os.path.basename(dist["zip"]) if dist["zip"] else ""
-            zip_size = ""
-            if dist["zip"]:
-                size_mb = os.path.getsize(dist["zip"]) / (1024 * 1024)
-                zip_size = f" ({size_mb:.1f} MB)"
+            # Lấy done items của project từ báo cáo hôm nay
+            reports = get_today_reports()
+            done_items = get_project_done_items(reports, job.project)
 
-            caption = (
-                f"\u2705 <b>Build #{job.build_id} THÀNH CÔNG</b>\n"
-                f"Dự án: <code>{escape(job.project)}</code> | Branch: <code>{escape(job.branch)}</code>\n"
-                f"Bởi: {escape(job.user_name)} | Thời gian: <b>{duration_str}</b>"
-            )
-            if zip_name:
-                caption += f"\nFile: <code>{escape(zip_name)}</code>{zip_size}"
+            caption = f"<b>{escape(job.project)}</b>"
+            if done_items:
+                for i, item in enumerate(done_items, 1):
+                    caption += f"\n{i}. {escape(item)}"
+            else:
+                caption += "\n<i>Chưa có báo cáo done cho dự án này hôm nay</i>"
 
             # Edit zip placeholder → zip thật
             if msg_zip and dist["zip"]:

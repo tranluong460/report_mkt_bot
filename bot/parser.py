@@ -68,6 +68,24 @@ def parse_report(text: str) -> dict:
     return result
 
 
+def get_project_done_items(reports: dict, project_name: str) -> list:
+    """Lấy danh sách done items của 1 project cụ thể từ reports.
+    Match theo tên project (case-insensitive, substring)."""
+    target = project_name.lower().strip()
+    items = []
+    seen = set()
+    for report in reports.values():
+        for proj in report.get("projects", []):
+            name = proj.get("name", "").lower().strip()
+            # Match nếu tên project chứa target hoặc ngược lại
+            if target in name or name in target:
+                for done in proj.get("done", []):
+                    if done and done not in seen:
+                        seen.add(done)
+                        items.append(done)
+    return items
+
+
 def build_summary_message(reports: dict) -> str:
     """Aggregate done items by project name across all user reports."""
     if not reports:
