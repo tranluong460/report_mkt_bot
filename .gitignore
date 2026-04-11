@@ -1,3 +1,35 @@
+# --- Env & secrets ---
 .env
+.env.local
+*.env.local
+
+# --- Python ---
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# --- PyInstaller build output ---
+build/
+dist/
+*.spec
+
+# --- Build logs & artifacts ---
+builds/
+logs/
+*.log
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Vercel ---
 .vercel/
