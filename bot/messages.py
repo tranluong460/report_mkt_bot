@@ -9,8 +9,28 @@ from html import escape
 from bot.config import VN_TZ
 from bot.constants import (
     EMOJI_REPORT, EMOJI_CHECK, EMOJI_CROSS, EMOJI_HAMMER, EMOJI_HOURGLASS, EMOJI_WARNING,
+    EMOJI_ROCKET, EMOJI_LIGHTNING, EMOJI_SNAIL, EMOJI_FIRE, EMOJI_TROPHY, EMOJI_PACKAGE,
     STEP_ICONS, EMOJI_WHITE_SQUARE, MAX_QUEUE_SIZE, MAX_CONCURRENT_BUILDS,
+    FAST_BUILD_THRESHOLD, SLOW_BUILD_THRESHOLD, POPULAR_BUILD_THRESHOLD,
 )
+
+
+def duration_emoji(seconds: float) -> str:
+    """Trả về emoji theo độ dài build.
+    <2 phút = ⚡ fast, >10 phút = 🐌 slow, còn lại = ✅ normal."""
+    if seconds < FAST_BUILD_THRESHOLD:
+        return EMOJI_LIGHTNING
+    if seconds > SLOW_BUILD_THRESHOLD:
+        return EMOJI_SNAIL
+    return EMOJI_CHECK
+
+
+def popularity_badge(project: str, recent_builds: list) -> str:
+    """Trả về badge nếu project là popular (build nhiều trong history)."""
+    count = sum(1 for b in recent_builds if b.get("project") == project and b.get("success"))
+    if count >= POPULAR_BUILD_THRESHOLD:
+        return f" {EMOJI_FIRE}"
+    return ""
 
 
 # ============ NHẮC NHỞ ============
@@ -81,6 +101,14 @@ def build_waiting(build_id: int, project: str, branch: str) -> str:
     )
 
 
+def build_starting(build_id: int, project: str, branch: str) -> str:
+    return (
+        f"{EMOJI_ROCKET} <b>Build #{build_id}</b> bắt đầu chạy\n"
+        f"Dự án: <code>{escape(project)}</code>\n"
+        f"Branch: <code>{escape(branch)}</code>"
+    )
+
+
 def build_queued(build_id: int, project: str, branch: str, position: int) -> str:
     return (
         f"<b>Build #{build_id}</b> đã thêm vào hàng đợi (vị trí #{position})\n"
@@ -145,10 +173,18 @@ def build_project_not_found(project: str) -> str:
 
 # ============ BUILD - Result ============
 
-def build_success_caption(project: str, done_items: list) -> str:
-    """Caption khi build thành công - liệt kê done items của project."""
+def build_success_caption(project: str, done_items: list,
+                          duration_seconds: float = 0,
+                          recent_builds: list | None = None) -> str:
+    """Caption khi build thành công - liệt kê done items của project.
+
+    Emoji theo duration (⚡ fast / ✅ normal / 🐌 slow) +
+    badge 🔥 nếu project build nhiều lần gần đây.
+    """
     today = datetime.now(VN_TZ).strftime("%d/%m/%Y")
-    lines = [f"<b>{escape(project)} - {today}</b>"]
+    icon = duration_emoji(duration_seconds)
+    badge = popularity_badge(project, recent_builds or [])
+    lines = [f"{icon} <b>{escape(project)} - {today}</b>{badge}"]
     if done_items:
         for i, item in enumerate(done_items, 1):
             lines.append(f"{i}. {escape(item)}")
@@ -169,7 +205,7 @@ def build_log_header(build_id: int, project: str, branch: str, user: str, elapse
                      step_status: list, total: int) -> str:
     """Header message cho LOG topic - đang chạy."""
     lines = [
-        f"{EMOJI_HAMMER} <b>Build #{build_id}</b> đang chạy...",
+        f"{EMOJI_ROCKET} <b>Build #{build_id}</b> đang chạy...",
         f"Dự án: <code>{escape(project)}</code> | Branch: <code>{escape(branch)}</code>",
         f"Bởi: {escape(user)} | Đã chạy: {elapsed}",
         "",
@@ -184,12 +220,15 @@ def build_log_header(build_id: int, project: str, branch: str, user: str, elapse
 
 
 def build_log_final(build_id: int, project: str, branch: str, user: str, duration: str,
-                    step_status: list, success: bool, error: str = None) -> str:
-    """Final message cho LOG topic - đã xong."""
-    title = (
-        f"{EMOJI_CHECK} <b>Build #{build_id} THÀNH CÔNG</b>" if success
-        else f"{EMOJI_CROSS} <b>Build #{build_id} THẤT BẠI</b>"
-    )
+                    step_status: list, success: bool, error: str = None,
+                    duration_seconds: float = 0) -> str:
+    """Final message cho LOG topic - đã xong. Dùng emoji theo duration."""
+    if success:
+        icon = duration_emoji(duration_seconds)
+        title = f"{icon} <b>Build #{build_id} THÀNH CÔNG</b>"
+    else:
+        title = f"{EMOJI_CROSS} <b>Build #{build_id} THẤT BẠI</b>"
+
     lines = [
         title,
         f"Dự án: <code>{escape(project)}</code> | Branch: <code>{escape(branch)}</code>",

@@ -15,7 +15,7 @@ from bot.telegram import (
     edit_message_reply_markup,
 )
 from bot.store import (
-    save_build_record, get_today_reports,
+    save_build_record, get_today_reports, get_recent_builds,
     register_active_build, unregister_active_build,
 )
 from bot.parser import get_project_done_items
@@ -192,6 +192,7 @@ class BuildWorker:
         msg = messages.build_log_final(
             job.build_id, job.project, job.branch, job.user_name,
             duration_str, step_status, result["success"], result["error"],
+            duration_seconds=result["duration"],
         )
         if log_msg_id and result["log_path"]:
             edit_message_media(chat_id, log_msg_id, result["log_path"], msg)
@@ -215,10 +216,15 @@ class BuildWorker:
         dist = get_dist_files(job.project)
         logger.info(f"Build #{job.build_id} OK | zip={dist['zip']} | latest={dist['latest']}")
 
-        # Caption: done items của project hôm nay
+        # Caption: done items + emoji theo duration + popularity badge
         reports = get_today_reports()
         done_items = get_project_done_items(reports, job.project)
-        caption = messages.build_success_caption(job.project, done_items)
+        recent = get_recent_builds(20)
+        caption = messages.build_success_caption(
+            job.project, done_items,
+            duration_seconds=result["duration"],
+            recent_builds=recent,
+        )
 
         files = [f for f in (dist["zip"], dist["latest"]) if f]
 

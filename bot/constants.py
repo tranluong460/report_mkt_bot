@@ -12,6 +12,20 @@ EMOJI_ALARM = "\u23f0"
 EMOJI_WHITE_SQUARE = "\u2b1c"
 EMOJI_REPORT = "\U0001f4cb"
 
+# --- Rich notification emojis ---
+EMOJI_ROCKET = "\U0001f680"       # 🚀 started
+EMOJI_LIGHTNING = "\u26a1"          # ⚡ fast
+EMOJI_SNAIL = "\U0001f40c"         # 🐌 slow
+EMOJI_FIRE = "\U0001f525"          # 🔥 popular
+EMOJI_STAR = "\u2b50"               # ⭐ milestone
+EMOJI_TROPHY = "\U0001f3c6"        # 🏆 top build
+EMOJI_PACKAGE = "\U0001f4e6"       # 📦 artifact
+
+# --- Thresholds (giây) ---
+FAST_BUILD_THRESHOLD = 120         # < 2 phút = fast
+SLOW_BUILD_THRESHOLD = 600         # > 10 phút = slow
+POPULAR_BUILD_THRESHOLD = 5        # project build >= 5 lần/tuần = popular
+
 # --- Step status icons ---
 STEP_ICONS = {
     "running": EMOJI_HOURGLASS,
