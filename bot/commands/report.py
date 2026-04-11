@@ -3,12 +3,12 @@
 from bot.config import TOPIC_ID
 from bot.constants import EMOJI_THUMBS_UP, EMOJI_THINKING
 from bot.parser import parse_report
-from bot.store import save_report
+from bot.store import save_report, add_member
 from bot.telegram import react_to_message, send_telegram_message
 from bot import messages
 
 
-def handle_report(chat_id, message_id, thread_id, text, user_id, first_name) -> bool:
+def handle_report(chat_id, message_id, thread_id, text, user_id, first_name, username="") -> bool:
     """Xử lý message trong report topic. Trả về True nếu đã handle."""
     if not thread_id or str(thread_id) != str(TOPIC_ID):
         return False
@@ -19,6 +19,8 @@ def handle_report(chat_id, message_id, thread_id, text, user_id, first_name) -> 
         report = parse_report(text)
         if report["date"] and report["name"] and report["projects"]:
             save_report(user_id, report)
+            # Auto-follow: ai nộp báo cáo → tự động add vào members
+            add_member(user_id, first_name, username)
             react_to_message(chat_id, message_id, EMOJI_THUMBS_UP)
         else:
             react_to_message(chat_id, message_id, EMOJI_THINKING)

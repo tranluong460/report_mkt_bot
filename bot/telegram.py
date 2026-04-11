@@ -89,6 +89,7 @@ def send_document(
     caption: str = "",
     thread_id: int | None = None,
     parse_mode: str | None = None,
+    reply_markup: dict | None = None,
 ) -> dict:
     try:
         data = {"chat_id": str(chat_id)}
@@ -98,6 +99,8 @@ def send_document(
             data["parse_mode"] = parse_mode
         if thread_id is not None:
             data["message_thread_id"] = str(thread_id)
+        if reply_markup:
+            data["reply_markup"] = json.dumps(reply_markup)
 
         with open(file_path, "rb") as f:
             response = _client.post(
@@ -108,6 +111,32 @@ def send_document(
         return response.json()
     except (httpx.HTTPError, FileNotFoundError) as e:
         logger.warning(f"sendDocument failed: {e}")
+        return {"ok": False}
+
+
+def edit_message_reply_markup(chat_id: int, message_id: int, reply_markup: dict | None = None) -> dict:
+    """Xoá/thay inline keyboard của message."""
+    try:
+        payload = {"chat_id": chat_id, "message_id": message_id}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        response = _client.post(f"{TELEGRAM_API}/editMessageReplyMarkup", json=payload)
+        return response.json()
+    except httpx.HTTPError as e:
+        logger.warning(f"editMessageReplyMarkup failed: {e}")
+        return {"ok": False}
+
+
+def answer_callback_query(callback_query_id: str, text: str = "") -> dict:
+    """Trả lời callback từ inline button (để Telegram ngừng loading)."""
+    try:
+        payload = {"callback_query_id": callback_query_id}
+        if text:
+            payload["text"] = text
+        response = _client.post(f"{TELEGRAM_API}/answerCallbackQuery", json=payload)
+        return response.json()
+    except httpx.HTTPError as e:
+        logger.warning(f"answerCallbackQuery failed: {e}")
         return {"ok": False}
 
 
@@ -190,7 +219,11 @@ def get_updates(offset: int = 0, timeout: int = 30) -> list:
     try:
         response = _client.post(
             f"{TELEGRAM_API}/getUpdates",
-            json={"offset": offset, "timeout": timeout, "allowed_updates": ["message"]},
+            json={
+                "offset": offset,
+                "timeout": timeout,
+                "allowed_updates": ["message", "callback_query"],
+            },
         )
         return response.json().get("result", [])
     except httpx.HTTPError as e:

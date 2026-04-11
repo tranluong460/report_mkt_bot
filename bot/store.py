@@ -10,7 +10,8 @@ import redis
 from bot.config import KV_REDIS_URL, VN_TZ
 from bot.constants import (
     KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_AUTH, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
-    KEY_BUILD_ACTIVE, TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
+    KEY_BUILD_ACTIVE, KEY_BUILD_SEEN,
+    TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
 )
 
 logger = logging.getLogger("bot.store")
@@ -143,3 +144,15 @@ def get_all_active_builds() -> dict:
 def clear_active_builds() -> None:
     """Xoá toàn bộ active builds. Dùng sau khi cleanup startup."""
     db.delete(KEY_BUILD_ACTIVE)
+
+
+# ============ BUILD SEEN USERS (để hiện guide lần đầu) ============
+
+@_with_redis(False)
+def has_seen_build(user_id: str) -> bool:
+    return bool(db.sismember(KEY_BUILD_SEEN, user_id))
+
+
+@_with_redis(None)
+def mark_build_seen(user_id: str) -> None:
+    db.sadd(KEY_BUILD_SEEN, user_id)

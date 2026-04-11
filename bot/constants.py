@@ -29,6 +29,7 @@ KEY_BUILD_AUTH = "build:authorized"      # Set: user_id
 KEY_BUILD_COUNTER = "build:counter"      # Int: auto-increment
 KEY_BUILDS_RECENT = "builds:recent"      # List: JSON của 20 builds gần nhất
 KEY_BUILD_ACTIVE = "build:active"        # Hash: build_id -> JSON {chat_id, message_ids, project, branch}
+KEY_BUILD_SEEN = "build:seen_users"      # Set: user_ids đã gọi /build lần đầu (để hiện guide)
 
 # --- TTL (giây) ---
 TTL_REPORT = 172800          # 2 ngày

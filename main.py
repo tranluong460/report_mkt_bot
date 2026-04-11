@@ -19,11 +19,31 @@ from bot.poller import run_polling
 
 
 def setup_logging():
+    from logging.handlers import RotatingFileHandler
+    import os
+
+    log_dir = os.environ.get("BOT_LOG_DIR", "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, "bot.log")
+
+    fmt = logging.Formatter(
+        "%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(fmt)
+
+    # File handler - rotate khi file > 10MB, giữ 5 backup
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+    )
+    file_handler.setFormatter(fmt)
+
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        stream=sys.stdout,
+        handlers=[console_handler, file_handler],
         force=True,
     )
     sys.stdout.reconfigure(line_buffering=True)
@@ -65,13 +85,18 @@ def send_daily_summary():
 
 
 def setup_scheduler() -> BackgroundScheduler:
+    from bot.scheduled import send_missing_report_alert
     scheduler = BackgroundScheduler(timezone="UTC")
-    # Nhắc ngày: 16:30 VN T2-T6 (09:30 UTC)
-    scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=30, day_of_week="mon-fri")
-    # Nhắc ngày: 11:00 VN T7 (04:00 UTC)
-    scheduler.add_job(send_daily_reminder, "cron", hour=4, minute=0, day_of_week="sat")
+    # Nhắc ngày: 16:00 VN T2-T6 (09:00 UTC)
+    scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=0, day_of_week="mon-fri")
+    # Nhắc ngày: 10:00 VN T7 (03:00 UTC)
+    scheduler.add_job(send_daily_reminder, "cron", hour=3, minute=0, day_of_week="sat")
     # Nhắc tuần: 09:00 VN T7 (02:00 UTC)
     scheduler.add_job(send_weekly_reminder, "cron", hour=2, minute=0, day_of_week="sat")
+    # Missing report alert: 21:00 VN T2-T6 (14:00 UTC)
+    scheduler.add_job(send_missing_report_alert, "cron", hour=14, minute=0, day_of_week="mon-fri")
+    # Missing report alert: 11:00 VN T7 (04:00 UTC)
+    scheduler.add_job(send_missing_report_alert, "cron", hour=4, minute=0, day_of_week="sat")
     # Tổng hợp: 23:00 VN T2-T7 (16:00 UTC)
     scheduler.add_job(send_daily_summary, "cron", hour=16, minute=0, day_of_week="mon-sat")
     return scheduler

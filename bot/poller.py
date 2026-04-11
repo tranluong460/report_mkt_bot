@@ -4,14 +4,18 @@ import logging
 import time
 
 from bot.config import GROUP_CHAT_ID
-from bot.telegram import get_updates
+from bot.telegram import get_updates, answer_callback_query, delete_message
 from bot.commands.report import handle_report
 from bot.commands.member import handle_follow, handle_unfollow, handle_all
-from bot.commands.admin import handle_debug, handle_build_auth, handle_build_unauth, handle_help
+from bot.commands.admin import (
+    handle_debug, handle_build_auth, handle_build_unauth,
+    handle_help, handle_health,
+)
 from bot.commands.build import (
     handle_build, handle_cancel, handle_queue, handle_status,
-    handle_log, handle_build_history,
+    handle_log, handle_build_history, handle_retry, handle_stats,
 )
+from bot.commands.export import handle_export
 from bot.builder.queue import BuildQueue
 
 logger = logging.getLogger("bot.poller")
@@ -55,16 +59,20 @@ def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
 
     handlers = {
         "/help":          lambda: handle_help(chat_id, thread_id),
+        "/health":        lambda: handle_health(chat_id, thread_id, build_queue),
         "/debug":         lambda: handle_debug(chat_id, thread_id, user_id),
         "/follow":        lambda: handle_follow(chat_id, thread_id, user_id, first_name, username),
         "/unfollow":      lambda: handle_unfollow(chat_id, thread_id, user_id, first_name),
         "/all":           lambda: handle_all(chat_id, thread_id, message_id, text),
         "/build":         lambda: handle_build(chat_id, thread_id, message_id, text, user_id, first_name, build_queue),
+        "/retry":         lambda: handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, build_queue),
         "/cancel":        lambda: handle_cancel(chat_id, thread_id, text, user_id, build_queue),
         "/queue":         lambda: handle_queue(chat_id, thread_id, build_queue),
         "/status":        lambda: handle_status(chat_id, thread_id, build_queue),
         "/log":           lambda: handle_log(chat_id, thread_id, text),
         "/build_history": lambda: handle_build_history(chat_id, thread_id),
+        "/stats":         lambda: handle_stats(chat_id, thread_id),
+        "/export":        lambda: handle_export(chat_id, thread_id),
         "/build_auth":    lambda: handle_build_auth(chat_id, thread_id, user_id, text),
         "/build_unauth":  lambda: handle_build_unauth(chat_id, thread_id, user_id, text),
     }
@@ -76,14 +84,50 @@ def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
     return False
 
 
+def _handle_callback_query(update: dict, build_queue: BuildQueue) -> None:
+    """Xử lý click inline button."""
+    cb = update.get("callback_query", {})
+    cb_id = cb.get("id")
+    data = cb.get("data", "")
+    message = cb.get("message", {})
+    chat_id = message.get("chat", {}).get("id")
+    msg_id = message.get("message_id")
+
+    if not cb_id or not chat_id or not msg_id:
+        return
+
+    # callback_data format: "cancel:<build_id>"
+    if data.startswith("cancel:"):
+        try:
+            build_id = int(data.split(":", 1)[1])
+        except (ValueError, IndexError):
+            answer_callback_query(cb_id, "Dữ liệu không hợp lệ")
+            return
+
+        if build_queue.cancel(build_id):
+            delete_message(chat_id, msg_id)
+            answer_callback_query(cb_id, f"Đã huỷ Build #{build_id}")
+        else:
+            answer_callback_query(cb_id, "Không huỷ được (có thể đang chạy)")
+        return
+
+    answer_callback_query(cb_id)
+
+
 def handle_update(update: dict, build_queue: BuildQueue) -> None:
+    # Callback query (inline button)
+    if "callback_query" in update:
+        _handle_callback_query(update, build_queue)
+        return
+
     ctx = _extract_message(update)
     if not ctx:
         return
 
     # Report topic → handle riêng
     if handle_report(ctx["chat_id"], ctx["message_id"], ctx["thread_id"],
-                     ctx["text"], ctx["user_id"], ctx["first_name"]):
+                     ctx["text"], ctx["user_id"], ctx["first_name"],
+                     ctx["username"]):
         return
 
     text = ctx["text"].strip()

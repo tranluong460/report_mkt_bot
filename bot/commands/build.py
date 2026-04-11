@@ -3,7 +3,10 @@
 import os
 
 from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
-from bot.store import get_build_authorized, next_build_id, get_recent_builds, register_active_build
+from bot.store import (
+    get_build_authorized, next_build_id, get_recent_builds,
+    register_active_build, has_seen_build, mark_build_seen,
+)
 from bot.telegram import send_telegram_message, send_document, edit_message_media, delete_message
 from bot import messages
 from bot.builder.queue import BuildJob
@@ -27,6 +30,11 @@ def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, buil
     jobs_spec = _parse_build_args(chat_id, thread_id, text)
     if not jobs_spec:
         return
+
+    # First-time guide
+    if not has_seen_build(user_id):
+        _send(chat_id, messages.first_time_build_guide(first_name), thread_id)
+        mark_build_seen(user_id)
 
     # Multi-build: xoá command message ngay sau khi parse OK (không cần chờ)
     # Single-build: để worker xoá sau khi build xong
@@ -166,8 +174,58 @@ def _create_placeholder(build_id, project, branch) -> str:
 
 def _send_placeholder(chat_id, thread_id, path, build_id, project, branch) -> int | None:
     caption = messages.build_waiting(build_id, project, branch)
-    result = send_document(chat_id, path, caption=caption, thread_id=thread_id, parse_mode="HTML")
+    reply_markup = {
+        "inline_keyboard": [[
+            {"text": "\u274c Huỷ build", "callback_data": f"cancel:{build_id}"}
+        ]]
+    }
+    result = send_document(
+        chat_id, path, caption=caption,
+        thread_id=thread_id, parse_mode="HTML",
+        reply_markup=reply_markup,
+    )
     return result["result"]["message_id"] if result.get("ok") else None
+
+
+# ============ /retry ============
+
+def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, build_queue):
+    """Retry 1 build thất bại. Tìm trong build history → tạo job mới cùng project/branch."""
+    if not _check_build_topic(chat_id, thread_id):
+        return
+    if not _check_build_auth(chat_id, thread_id, user_id):
+        return
+
+    parts = text.strip().split()
+    if len(parts) < 2:
+        _send(chat_id, messages.RETRY_SYNTAX, thread_id)
+        return
+
+    try:
+        target_id = int(parts[1])
+    except ValueError:
+        _send(chat_id, messages.CANCEL_ID_NOT_NUMBER, thread_id)
+        return
+
+    # Tìm trong history
+    history = get_recent_builds(20)
+    target = next((b for b in history if b.get("id") == target_id), None)
+    if not target:
+        _send(chat_id, messages.retry_not_found(target_id), thread_id)
+        return
+    if target.get("success"):
+        _send(chat_id, messages.retry_not_failed(target_id), thread_id)
+        return
+
+    project = target.get("project")
+    branch = target.get("branch", "main")
+
+    # Xoá message /retry của user ngay
+    delete_message(chat_id, message_id)
+
+    # Enqueue như build bình thường
+    _enqueue_build(chat_id, thread_id, None, user_id, first_name,
+                   project, branch, build_queue)
 
 
 # ============ /cancel ============
@@ -234,3 +292,10 @@ def handle_build_history(chat_id, thread_id):
         _send(chat_id, messages.NO_BUILD_HISTORY, thread_id)
         return
     _send(chat_id, messages.build_history(builds), thread_id)
+
+
+# ============ /stats ============
+
+def handle_stats(chat_id, thread_id):
+    builds = get_recent_builds(20)
+    _send(chat_id, messages.build_stats(builds), thread_id)

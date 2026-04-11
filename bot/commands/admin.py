@@ -1,12 +1,30 @@
-"""Admin commands: /debug, /build_auth, /build_unauth, /help."""
+"""Admin commands: /debug, /build_auth, /build_unauth, /help, /health."""
 
+import time
 from datetime import datetime
 from functools import wraps
 
 from bot.config import TOPIC_ID, BUILD_TOPIC_ID, ADMIN_USER_ID, VN_TZ
-from bot.store import db, get_today_reports, get_build_authorized, add_build_authorized, remove_build_authorized
+from bot.store import (
+    db, get_today_reports, get_build_authorized,
+    add_build_authorized, remove_build_authorized, get_members,
+)
 from bot.telegram import send_telegram_message
 from bot import messages
+
+_START_TIME = time.time()
+
+
+def _uptime_str() -> str:
+    seconds = int(time.time() - _START_TIME)
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, _ = divmod(rem, 60)
+    if days:
+        return f"{days}d {hours}h {minutes}m"
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
 
 
 def _send(chat_id, text, thread_id):
@@ -78,3 +96,26 @@ def handle_build_unauth(chat_id, thread_id, user_id, text):
 
 def handle_help(chat_id, thread_id):
     _send(chat_id, messages.HELP_TEXT, thread_id)
+
+
+# ============ /health ============
+
+def handle_health(chat_id, thread_id, build_queue):
+    redis_ok = False
+    if db is not None:
+        try:
+            db.ping()
+            redis_ok = True
+        except Exception:
+            redis_ok = False
+
+    members_count = len(get_members())
+    status = build_queue.get_status()
+
+    _send(chat_id, messages.health_status(
+        redis_ok=redis_ok,
+        members_count=members_count,
+        running_count=len(status["running"]),
+        pending_count=len(status["pending"]),
+        uptime_str=_uptime_str(),
+    ), thread_id)

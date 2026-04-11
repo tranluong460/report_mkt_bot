@@ -12,6 +12,7 @@ from bot.constants import MAX_CONCURRENT_BUILDS, EDIT_THROTTLE_SECONDS
 from bot.telegram import (
     send_telegram_message, edit_message_caption, send_document,
     edit_message_media, delete_message, send_media_group,
+    edit_message_reply_markup,
 )
 from bot.store import (
     save_build_record, get_today_reports,
@@ -64,6 +65,9 @@ class BuildWorker:
     def _process_job(self, job: BuildJob):
         ctx = self._build_context(job)
         ctx["log_msg_id"] = self._send_log_placeholder(ctx["chat_id"], ctx["log_thread_id"], job)
+        # Xoá nút "Huỷ" trên BUILD message vì đã start, không huỷ được
+        if job.message_id:
+            edit_message_reply_markup(ctx["chat_id"], job.message_id, None)
         self._register(job, ctx)
 
         # Chạy build với callback cập nhật progress

@@ -41,6 +41,23 @@ REPORT_FORMAT_HELP = (
 )
 
 
+def missing_report_alert(missing_members: dict) -> str:
+    """Tạo message tag các user chưa nộp báo cáo.
+
+    missing_members: dict {user_id: {first_name, username}}
+    """
+    mentions = []
+    for uid, info in missing_members.items():
+        name = escape(info.get("first_name", "") or "User")
+        mentions.append(f'<a href="tg://user?id={uid}">{name}</a>')
+
+    return (
+        f"{EMOJI_WARNING} <b>Nhắc báo cáo hôm nay</b>\n\n"
+        f"Những bạn sau chưa nộp báo cáo:\n"
+        + "  " + " ".join(mentions)
+    )
+
+
 # ============ MEMBER ============
 
 def follow_success(first_name: str) -> str:
@@ -74,6 +91,16 @@ def build_queued(build_id: int, project: str, branch: str, position: int) -> str
 
 BUILD_QUEUE_FULL = f"Hàng đợi đầy (tối đa {MAX_QUEUE_SIZE}). Vui lòng thử lại sau."
 
+RETRY_SYNTAX = "<b>Cú pháp:</b> <code>/retry &lt;build_id&gt;</code>"
+
+
+def retry_not_found(build_id: int) -> str:
+    return f"Không tìm thấy Build #{build_id} trong lịch sử."
+
+
+def retry_not_failed(build_id: int) -> str:
+    return f"Build #{build_id} không phải build thất bại, không thể retry."
+
 
 def build_duplicate(project: str) -> str:
     return f"Dự án <code>{escape(project)}</code> đang chạy hoặc trong hàng đợi, không thể thêm lại."
@@ -91,6 +118,25 @@ BUILD_SYNTAX = (
     "<code>/build mkt-care-2025 develop</code>\n"
     "<code>/build mkt-care-2025 mkt-post-2026 mkt-uid-2025</code>"
 )
+
+
+def first_time_build_guide(first_name: str) -> str:
+    return (
+        f"{EMOJI_HAMMER} <b>Chào {escape(first_name)}!</b>\n\n"
+        "Đây là lần đầu bạn dùng <code>/build</code>. Tóm tắt nhanh:\n\n"
+        "<b>Cách dùng:</b>\n"
+        "• <code>/build mkt-care-2025</code> - build 1 dự án\n"
+        "• <code>/build mkt-care-2025 develop</code> - build branch cụ thể\n"
+        "• <code>/build ds1 ds2 ds3</code> - build nhiều dự án song song\n\n"
+        "<b>Các lệnh liên quan:</b>\n"
+        "• <code>/queue</code> - xem hàng đợi\n"
+        "• <code>/status</code> - xem build đang chạy\n"
+        "• <code>/cancel &lt;id&gt;</code> - huỷ build trong queue\n"
+        "• <code>/retry &lt;id&gt;</code> - retry build thất bại\n"
+        "• <code>/log &lt;id&gt;</code> - xem log\n"
+        "• <code>/build_history</code> - lịch sử build\n\n"
+        f"{EMOJI_HOURGLASS} Build đang được xử lý..."
+    )
 
 
 def build_project_not_found(project: str) -> str:
@@ -256,6 +302,55 @@ def log_tail(build_id: int, tail: str) -> str:
 NO_BUILD_HISTORY = "Chưa có build nào."
 
 
+def build_stats(builds: list) -> str:
+    """Thống kê builds từ lịch sử."""
+    if not builds:
+        return "Chưa có build nào để thống kê."
+
+    total = len(builds)
+    success = sum(1 for b in builds if b.get("success"))
+    failed = total - success
+
+    # Group by project
+    by_project: dict[str, dict] = {}
+    for b in builds:
+        pj = b.get("project", "?")
+        entry = by_project.setdefault(pj, {"total": 0, "success": 0, "failed": 0})
+        entry["total"] += 1
+        if b.get("success"):
+            entry["success"] += 1
+        else:
+            entry["failed"] += 1
+
+    # Group by user
+    by_user: dict[str, int] = {}
+    for b in builds:
+        u = b.get("user_name", "?")
+        by_user[u] = by_user.get(u, 0) + 1
+    top_users = sorted(by_user.items(), key=lambda x: -x[1])[:5]
+
+    lines = [
+        f"<b>Thống kê build (gần đây {total})</b>",
+        f"{EMOJI_CHECK} Thành công: <b>{success}</b> ({success * 100 // total}%)",
+        f"{EMOJI_CROSS} Thất bại: <b>{failed}</b>",
+        "",
+        "<b>Theo dự án:</b>",
+    ]
+    for pj in sorted(by_project.keys()):
+        s = by_project[pj]
+        lines.append(
+            f"  <code>{escape(pj)}</code>: {s['total']} "
+            f"({s['success']} {EMOJI_CHECK} / {s['failed']} {EMOJI_CROSS})"
+        )
+
+    lines.append("")
+    lines.append("<b>Top users:</b>")
+    for user, count in top_users:
+        lines.append(f"  {escape(user)}: <b>{count}</b> builds")
+
+    return "\n".join(lines)
+
+
 def build_history(builds: list) -> str:
     lines = ["<b>Lịch sử build gần đây:</b>", ""]
     for b in builds:
@@ -295,12 +390,14 @@ HELP_TEXT = """<b>Danh sách lệnh:</b>
 
 <b>Chung:</b>
 /help - Hiển thị danh sách lệnh này
+/health - Kiểm tra sức khoẻ hệ thống
 
 <b>Báo cáo:</b>
-<code>date: ...</code> - Gửi báo cáo trong report topic
+<code>date: ...</code> - Gửi báo cáo trong report topic (tự động follow)
+/export - Xuất báo cáo hôm nay ra file
 
 <b>Thành viên:</b>
-/follow - Đăng ký nhận thông báo
+/follow - Đăng ký nhận thông báo (tự động khi nộp báo cáo)
 /unfollow - Huỷ đăng ký
 /all <code>&lt;nội dung&gt;</code> - Gửi thông báo tới tất cả người đã follow
 
@@ -308,11 +405,13 @@ HELP_TEXT = """<b>Danh sách lệnh:</b>
 /build <code>&lt;dự án&gt;</code> - Build 1 dự án (branch main)
 /build <code>&lt;dự án&gt; &lt;branch&gt;</code> - Build 1 dự án với branch cụ thể
 /build <code>&lt;ds 1&gt; &lt;ds 2&gt; ...</code> - Build nhiều dự án song song
+/retry <code>&lt;id&gt;</code> - Retry 1 build đã thất bại
 /cancel <code>&lt;id&gt;</code> - Huỷ build trong hàng đợi
 /queue - Xem hàng đợi build
 /status - Xem build đang chạy
 /log <code>&lt;id&gt;</code> - Xem 40 dòng log cuối của build
 /build_history - Lịch sử 10 build gần đây
+/stats - Thống kê build (tổng, theo project, top users)
 
 <b>Admin:</b>
 /debug - Trạng thái hệ thống (Redis, reports, quyền)
@@ -334,3 +433,16 @@ def debug_info(redis_ok: bool, topic_id, build_topic_id, thread_id,
         lines.append("Đã nộp: " + ", ".join(reporters))
     lines.append(f"Quyền build: <b>{auth_count}</b> người")
     return "\n".join(lines)
+
+
+def health_status(redis_ok: bool, members_count: int, running_count: int,
+                  pending_count: int, uptime_str: str) -> str:
+    redis_icon = EMOJI_CHECK if redis_ok else EMOJI_CROSS
+    return (
+        f"{EMOJI_HAMMER} <b>Health Check</b>\n\n"
+        f"{redis_icon} Redis: {'OK' if redis_ok else 'DOWN'}\n"
+        f"{EMOJI_CHECK} Workers: <b>{running_count}</b> đang chạy\n"
+        f"{EMOJI_HOURGLASS} Queue: <b>{pending_count}</b> pending\n"
+        f"\U0001f465 Members: <b>{members_count}</b>\n"
+        f"\u23f1 Uptime: <b>{uptime_str}</b>"
+    )
