@@ -247,18 +247,32 @@ def delete_webhook() -> bool:
 def set_my_commands(commands: list) -> bool:
     """Đăng ký danh sách lệnh để hiện menu "/" trong Telegram.
 
-    commands: list of tuples. Chỉ lấy 2 field đầu: (cmd, short_desc).
-    command KHÔNG có "/" đầu, description tối đa 256 ký tự.
+    Đăng ký cho cả 2 scope: default (chat riêng) và all_group_chats
+    (để hiện trong group/supergroup có topic).
     """
-    try:
-        payload = {
-            "commands": [
-                {"command": c[0], "description": c[1][:256]}
-                for c in commands
-            ]
-        }
-        response = _client.post(f"{TELEGRAM_API}/setMyCommands", json=payload)
-        return response.json().get("ok", False)
-    except httpx.HTTPError as e:
-        logger.warning(f"setMyCommands failed: {e}")
-        return False
+    cmd_list = [{"command": c[0], "description": c[1][:256]} for c in commands]
+    scopes = [
+        {"type": "default"},
+        {"type": "all_group_chats"},
+        {"type": "all_chat_administrators"},
+    ]
+    ok_all = True
+    for scope in scopes:
+        try:
+            response = _client.post(
+                f"{TELEGRAM_API}/setMyCommands",
+                json={"commands": cmd_list, "scope": scope},
+            )
+            data = response.json()
+            if not data.get("ok"):
+                logger.warning(
+                    f"setMyCommands scope={scope['type']} failed: "
+                    f"{data.get('description')} (status={response.status_code})"
+                )
+                ok_all = False
+            else:
+                logger.info(f"setMyCommands scope={scope['type']} ok")
+        except (httpx.HTTPError, ValueError) as e:
+            logger.warning(f"setMyCommands scope={scope['type']} error: {e}")
+            ok_all = False
+    return ok_all
