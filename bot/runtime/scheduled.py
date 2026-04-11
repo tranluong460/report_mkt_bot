@@ -3,8 +3,8 @@
 import logging
 
 from bot.config import GROUP_CHAT_ID, TOPIC_ID
-from bot.store import get_members, get_today_reports
-from bot.telegram import send_telegram_message
+from bot.core.store import get_members, get_today_reports
+from bot.core.telegram import send_html
 from bot import messages
 
 logger = logging.getLogger("bot.scheduled")
@@ -26,7 +26,4 @@ def send_missing_report_alert():
 
     logger.info(f"Missing report alert: {len(missing)} users")
     msg = messages.missing_report_alert(missing)
-    send_telegram_message(
-        int(GROUP_CHAT_ID), msg, int(TOPIC_ID),
-        parse_mode="HTML",
-    )
+    send_html(GROUP_CHAT_ID, msg, TOPIC_ID)

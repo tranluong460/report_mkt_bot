@@ -3,19 +3,15 @@
 import os
 
 from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
-from bot.store import (
+from bot.constants import LOG_TAIL_LINES, MAX_RECENT_BUILDS
+from bot.core.store import (
     get_build_authorized, next_build_id, get_recent_builds,
     register_active_build,
 )
-from bot.telegram import send_telegram_message, send_document, edit_message_media, delete_message
+from bot.core.telegram import send_html, send_document, edit_message_media, delete_message
 from bot import messages
 from bot.builder.queue import BuildJob
 from bot.builder.executor import validate_project, ensure_log_dir, get_log_tail
-
-
-def _send(chat_id, text, thread_id):
-    """Helper gửi message HTML."""
-    send_telegram_message(chat_id, text, thread_id, parse_mode="HTML")
 
 
 # ============ /build ============
@@ -50,7 +46,7 @@ def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
     """Tạo 1 build job và thêm vào queue. Trả về True nếu thành công."""
     build_id = next_build_id()
     if build_id == 0:
-        _send(chat_id, messages.BUILD_REDIS_ERROR, thread_id)
+        send_html(chat_id, messages.BUILD_REDIS_ERROR, thread_id)
         return False
 
     job = BuildJob(
@@ -62,7 +58,7 @@ def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
 
     # Check duplicate TRƯỚC khi gửi placeholder (tránh spam message)
     if build_queue.is_project_active(project):
-        _send(chat_id, messages.build_duplicate(project), thread_id)
+        send_html(chat_id, messages.build_duplicate(project), thread_id)
         return False
 
     placeholder_path = _create_placeholder(build_id, project, branch)
@@ -78,7 +74,7 @@ def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
         if job.message_id:
             edit_message_media(chat_id, job.message_id, placeholder_path, msg)
         else:
-            _send(chat_id, msg, thread_id)
+            send_html(chat_id, msg, thread_id)
         return False
 
     # Register active build ngay từ lúc pending (để cleanup nếu restart lúc còn pending)
@@ -98,7 +94,7 @@ def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
 
 def _check_build_topic(chat_id, thread_id) -> bool:
     if BUILD_TOPIC_ID and thread_id and str(thread_id) != str(BUILD_TOPIC_ID):
-        _send(chat_id, messages.BUILD_NOT_IN_TOPIC, thread_id)
+        send_html(chat_id, messages.BUILD_NOT_IN_TOPIC, thread_id)
         return False
     return True
 
@@ -106,7 +102,7 @@ def _check_build_topic(chat_id, thread_id) -> bool:
 def _check_build_auth(chat_id, thread_id, user_id) -> bool:
     authorized = get_build_authorized()
     if user_id not in authorized and str(ADMIN_USER_ID) != str(user_id):
-        _send(chat_id, messages.BUILD_NO_AUTH, thread_id)
+        send_html(chat_id, messages.BUILD_NO_AUTH, thread_id)
         return False
     return True
 
@@ -122,14 +118,14 @@ def _parse_build_args(chat_id, thread_id, text) -> list | None:
     """
     parts = text.strip().split()[1:]  # bỏ /build
     if not parts:
-        _send(chat_id, messages.BUILD_SYNTAX, thread_id)
+        send_html(chat_id, messages.BUILD_SYNTAX, thread_id)
         return None
 
     # Case 1: chỉ 1 arg → single project
     if len(parts) == 1:
         project = parts[0]
         if validate_project(project):
-            _send(chat_id, messages.build_project_not_found(project), thread_id)
+            send_html(chat_id, messages.build_project_not_found(project), thread_id)
             return None
         return [(project, "main")]
 
@@ -137,7 +133,7 @@ def _parse_build_args(chat_id, thread_id, text) -> list | None:
     if len(parts) == 2:
         first, second = parts
         if validate_project(first):
-            _send(chat_id, messages.build_project_not_found(first), thread_id)
+            send_html(chat_id, messages.build_project_not_found(first), thread_id)
             return None
         # arg2 là project hợp lệ → multi-build
         if not validate_project(second):
@@ -153,7 +149,7 @@ def _parse_build_args(chat_id, thread_id, text) -> list | None:
             continue  # Bỏ qua duplicate
         seen.add(p)
         if validate_project(p):
-            _send(chat_id, messages.build_project_not_found(p), thread_id)
+            send_html(chat_id, messages.build_project_not_found(p), thread_id)
             return None
         jobs.append((p, "main"))
     return jobs
@@ -193,23 +189,23 @@ def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, buil
 
     parts = text.strip().split()
     if len(parts) < 2:
-        _send(chat_id, messages.RETRY_SYNTAX, thread_id)
+        send_html(chat_id, messages.RETRY_SYNTAX, thread_id)
         return
 
     try:
         target_id = int(parts[1])
     except ValueError:
-        _send(chat_id, messages.CANCEL_ID_NOT_NUMBER, thread_id)
+        send_html(chat_id, messages.CANCEL_ID_NOT_NUMBER, thread_id)
         return
 
     # Tìm trong history
-    history = get_recent_builds(20)
+    history = get_recent_builds(MAX_RECENT_BUILDS)
     target = next((b for b in history if b.get("id") == target_id), None)
     if not target:
-        _send(chat_id, messages.retry_not_found(target_id), thread_id)
+        send_html(chat_id, messages.retry_not_found(target_id), thread_id)
         return
     if target.get("success"):
-        _send(chat_id, messages.retry_not_failed(target_id), thread_id)
+        send_html(chat_id, messages.retry_not_failed(target_id), thread_id)
         return
 
     project = target.get("project")
@@ -228,33 +224,33 @@ def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, buil
 def handle_cancel(chat_id, thread_id, text, user_id, build_queue):
     parts = text.strip().split()
     if len(parts) < 2:
-        _send(chat_id, messages.CANCEL_SYNTAX, thread_id)
+        send_html(chat_id, messages.CANCEL_SYNTAX, thread_id)
         return
 
     try:
         build_id = int(parts[1])
     except ValueError:
-        _send(chat_id, messages.CANCEL_ID_NOT_NUMBER, thread_id)
+        send_html(chat_id, messages.CANCEL_ID_NOT_NUMBER, thread_id)
         return
 
     if build_queue.cancel(build_id):
-        _send(chat_id, messages.cancel_success(build_id), thread_id)
+        send_html(chat_id, messages.cancel_success(build_id), thread_id)
     else:
-        _send(chat_id, messages.cancel_not_found(build_id), thread_id)
+        send_html(chat_id, messages.cancel_not_found(build_id), thread_id)
 
 
 # ============ /queue ============
 
 def handle_queue(chat_id, thread_id, build_queue):
     status = build_queue.get_status()
-    _send(chat_id, messages.queue_status(status["running"], status["pending"]), thread_id)
+    send_html(chat_id, messages.queue_status(status["running"], status["pending"]), thread_id)
 
 
 # ============ /status ============
 
 def handle_status(chat_id, thread_id, build_queue):
     status = build_queue.get_status()
-    _send(chat_id, messages.status_detail(status["running"], len(status["pending"])), thread_id)
+    send_html(chat_id, messages.status_detail(status["running"], len(status["pending"])), thread_id)
 
 
 # ============ /log ============
@@ -262,21 +258,21 @@ def handle_status(chat_id, thread_id, build_queue):
 def handle_log(chat_id, thread_id, text):
     parts = text.strip().split()
     if len(parts) < 2:
-        _send(chat_id, messages.LOG_SYNTAX, thread_id)
+        send_html(chat_id, messages.LOG_SYNTAX, thread_id)
         return
 
     try:
         build_id = int(parts[1])
     except ValueError:
-        _send(chat_id, messages.CANCEL_ID_NOT_NUMBER, thread_id)
+        send_html(chat_id, messages.CANCEL_ID_NOT_NUMBER, thread_id)
         return
 
     log_path = os.path.join(BUILD_LOG_DIR, f"build-{build_id}.log")
     if not os.path.exists(log_path):
-        _send(chat_id, messages.log_not_found(build_id), thread_id)
+        send_html(chat_id, messages.log_not_found(build_id), thread_id)
         return
 
-    _send(chat_id, messages.log_tail(build_id, get_log_tail(log_path, lines=40)), thread_id)
+    send_html(chat_id, messages.log_tail(build_id, get_log_tail(log_path, lines=LOG_TAIL_LINES)), thread_id)
 
 
 # ============ /build_history ============
@@ -284,13 +280,13 @@ def handle_log(chat_id, thread_id, text):
 def handle_build_history(chat_id, thread_id):
     builds = get_recent_builds(10)
     if not builds:
-        _send(chat_id, messages.NO_BUILD_HISTORY, thread_id)
+        send_html(chat_id, messages.NO_BUILD_HISTORY, thread_id)
         return
-    _send(chat_id, messages.build_history(builds), thread_id)
+    send_html(chat_id, messages.build_history(builds), thread_id)
 
 
 # ============ /stats ============
 
 def handle_stats(chat_id, thread_id):
-    builds = get_recent_builds(20)
-    _send(chat_id, messages.build_stats(builds), thread_id)
+    builds = get_recent_builds(MAX_RECENT_BUILDS)
+    send_html(chat_id, messages.build_stats(builds), thread_id)

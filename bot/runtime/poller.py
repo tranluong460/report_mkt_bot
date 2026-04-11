@@ -4,7 +4,7 @@ import logging
 import time
 
 from bot.config import GROUP_CHAT_ID
-from bot.telegram import get_updates, answer_callback_query, delete_message
+from bot.core.telegram import get_updates, answer_callback_query, delete_message
 from bot.commands.report import handle_report
 from bot.commands.member import handle_follow, handle_unfollow, handle_all
 from bot.commands.admin import (

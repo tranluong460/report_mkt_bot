@@ -8,17 +8,17 @@ from datetime import datetime
 import time
 
 from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID, BUILD_LOG_DIR
-from bot.constants import MAX_CONCURRENT_BUILDS, EDIT_THROTTLE_SECONDS
-from bot.telegram import (
+from bot.constants import MAX_CONCURRENT_BUILDS, EDIT_THROTTLE_SECONDS, DATE_FORMAT_COMPACT
+from bot.core.telegram import (
     send_telegram_message, edit_message_caption, send_document,
     edit_message_media, delete_message, send_media_group,
     edit_message_reply_markup,
 )
-from bot.store import (
+from bot.core.store import (
     save_build_record, get_today_reports, get_recent_builds,
     register_active_build, unregister_active_build,
 )
-from bot.parser import get_project_done_items
+from bot.core.parser import get_project_done_items
 from bot import messages
 from bot.builder.queue import BuildQueue, BuildJob
 from bot.builder.executor import execute_build, get_dist_files, ensure_log_dir, _fmt_duration
@@ -79,9 +79,9 @@ class BuildWorker:
     # ===== Context =====
 
     def _build_context(self, job: BuildJob) -> dict:
-        chat_id = int(GROUP_CHAT_ID)
-        build_thread_id = int(BUILD_TOPIC_ID)
-        log_thread_id = int(LOG_TOPIC_ID) if LOG_TOPIC_ID else build_thread_id
+        chat_id = GROUP_CHAT_ID
+        build_thread_id = BUILD_TOPIC_ID
+        log_thread_id = LOG_TOPIC_ID if LOG_TOPIC_ID else build_thread_id
         return {
             "chat_id": chat_id,
             "build_thread_id": build_thread_id,
@@ -175,7 +175,7 @@ class BuildWorker:
             "success": result["success"],
             "duration": duration_str,
             "error": result["error"],
-            "finished_at": datetime.now(VN_TZ).strftime("%d/%m %H:%M"),
+            "finished_at": datetime.now(VN_TZ).strftime(DATE_FORMAT_COMPACT),
         })
 
     def _finalize_step_status(self, step_status: list, result: dict):
@@ -263,8 +263,8 @@ class BuildWorker:
             send_telegram_message(chat_id, caption, build_thread_id, parse_mode="HTML")
 
     def _report_system_error(self, job: BuildJob, error: str):
-        chat_id = int(GROUP_CHAT_ID)
-        thread_id = int(LOG_TOPIC_ID) if LOG_TOPIC_ID else int(BUILD_TOPIC_ID)
+        chat_id = GROUP_CHAT_ID
+        thread_id = LOG_TOPIC_ID if LOG_TOPIC_ID else BUILD_TOPIC_ID
         send_telegram_message(
             chat_id, messages.build_system_error(job.build_id, error),
             thread_id, parse_mode="HTML",

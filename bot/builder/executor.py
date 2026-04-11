@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 from bot.config import BUILD_LOG_DIR, BUILD_PROJECT_DIR, VN_TZ
-from bot.constants import BUILD_STEPS, BUILD_TIMEOUT
+from bot.constants import BUILD_STEPS, BUILD_TIMEOUT, BUILD_TIMEOUT_MINUTES, DATE_FORMAT_LOG
 
 logger = logging.getLogger("bot.executor")
 
@@ -87,7 +87,7 @@ def _write_header(log_file, build_id, project, branch, project_dir, total):
     log_file.write(f"  Dự án: {project}\n")
     log_file.write(f"  Branch: {branch}\n")
     log_file.write(f"  Thư mục: {project_dir}\n")
-    log_file.write(f"  Bắt đầu: {datetime.now(VN_TZ).strftime('%Y-%m-%d %H:%M:%S')}\n")
+    log_file.write(f"  Bắt đầu: {datetime.now(VN_TZ).strftime(DATE_FORMAT_LOG)}\n")
     log_file.write(f"  Số bước: {total}\n")
     log_file.write(f"{'=' * 50}\n\n")
     log_file.flush()
@@ -97,7 +97,7 @@ def _write_footer(log_file, duration):
     log_file.write(f"{'=' * 50}\n")
     log_file.write(f"  BUILD THÀNH CÔNG\n")
     log_file.write(f"  Thời gian: {_fmt_duration(duration)}\n")
-    log_file.write(f"  Kết thúc: {datetime.now(VN_TZ).strftime('%Y-%m-%d %H:%M:%S')}\n")
+    log_file.write(f"  Kết thúc: {datetime.now(VN_TZ).strftime(DATE_FORMAT_LOG)}\n")
     log_file.write(f"{'=' * 50}\n")
 
 
@@ -128,9 +128,9 @@ def _run_step(log_file, cmd, i, total, label, project_dir) -> dict:
         return {"status": "done", "error": None}
 
     except subprocess.TimeoutExpired:
-        log_file.write(f"\n!!! TIMEOUT (30 phút) !!!\n\n")
+        log_file.write(f"\n!!! TIMEOUT ({BUILD_TIMEOUT_MINUTES} phút) !!!\n\n")
         log_file.flush()
-        return {"status": "timeout", "error": f"Bước [{i}/{total}] {label} timeout (30 phút)"}
+        return {"status": "timeout", "error": f"Bước [{i}/{total}] {label} timeout ({BUILD_TIMEOUT_MINUTES} phút)"}
 
     except Exception as e:
         log_file.write(f"\n!!! LỖI: {e} !!!\n\n")

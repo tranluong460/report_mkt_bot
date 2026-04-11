@@ -4,13 +4,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _int_env(key: str) -> int | None:
+    """Đọc env var dạng int, None nếu không có."""
+    val = os.environ.get(key)
+    if val is None or val == "":
+        return None
+    try:
+        return int(val)
+    except ValueError:
+        return None
+
+
 # --- Telegram ---
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-GROUP_CHAT_ID = os.environ.get("GROUP_CHAT_ID")
-TOPIC_ID = os.environ.get("TOPIC_ID")
-WEEKLY_TOPIC_ID = os.environ.get("WEEKLY_TOPIC_ID")
-BUILD_TOPIC_ID = os.environ.get("BUILD_TOPIC_ID")
-LOG_TOPIC_ID = os.environ.get("LOG_TOPIC_ID")
+GROUP_CHAT_ID = _int_env("GROUP_CHAT_ID")
+TOPIC_ID = _int_env("TOPIC_ID")
+WEEKLY_TOPIC_ID = _int_env("WEEKLY_TOPIC_ID")
+BUILD_TOPIC_ID = _int_env("BUILD_TOPIC_ID")
+LOG_TOPIC_ID = _int_env("LOG_TOPIC_ID")
+# ADMIN_USER_ID vẫn để string vì dùng so sánh với user_id (cũng là string)
 ADMIN_USER_ID = os.environ.get("ADMIN_USER_ID")
 
 # --- Redis ---

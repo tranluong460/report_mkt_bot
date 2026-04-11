@@ -2,9 +2,9 @@
 
 from bot.config import TOPIC_ID
 from bot.constants import EMOJI_THUMBS_UP, EMOJI_THINKING
-from bot.parser import parse_report
-from bot.store import save_report, add_member
-from bot.telegram import react_to_message, send_telegram_message
+from bot.core.parser import parse_report
+from bot.core.store import save_report, add_member
+from bot.core.telegram import react_to_message, send_telegram_message
 from bot import messages
 
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from bot.config import VN_TZ
-from bot.constants import MAX_QUEUE_SIZE
+from bot.constants import MAX_QUEUE_SIZE, DATE_FORMAT_JOB
 
 
 @dataclass
@@ -23,7 +23,7 @@ class BuildJob:
     message_id_2: int | None = None        # backup
     command_message_id: int | None = None  # message /build của user
     created_at: str = field(
-        default_factory=lambda: datetime.now(VN_TZ).strftime("%d/%m/%Y %H:%M:%S")
+        default_factory=lambda: datetime.now(VN_TZ).strftime(DATE_FORMAT_JOB)
     )
 
 

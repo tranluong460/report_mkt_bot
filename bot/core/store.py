@@ -12,6 +12,7 @@ from bot.constants import (
     KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_AUTH, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
     KEY_BUILD_ACTIVE,
     TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
+    DATE_FORMAT_KEY,
 )
 
 logger = logging.getLogger("bot.store")
@@ -40,7 +41,7 @@ def _with_redis(default):
 
 
 def _today_report_key() -> str:
-    today = datetime.now(VN_TZ).strftime("%Y-%m-%d")
+    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_KEY)
     return f"{KEY_REPORT_PREFIX}:{today}"
 
 

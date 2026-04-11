@@ -6,8 +6,9 @@ import tempfile
 from datetime import datetime
 
 from bot.config import VN_TZ
-from bot.store import get_today_reports
-from bot.telegram import send_telegram_message, send_document
+from bot.constants import DATE_FORMAT_KEY
+from bot.core.store import get_today_reports
+from bot.core.telegram import send_telegram_message, send_document
 from bot import messages
 
 
@@ -15,10 +16,10 @@ def handle_export(chat_id, thread_id):
     """Export báo cáo hôm nay ra file text."""
     reports = get_today_reports()
     if not reports:
-        send_telegram_message(chat_id, "Chưa có báo cáo nào hôm nay.", thread_id)
+        send_telegram_message(chat_id, messages.NO_REPORTS_TODAY, thread_id)
         return
 
-    today = datetime.now(VN_TZ).strftime("%Y-%m-%d")
+    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_KEY)
     content = _format_reports_text(reports, today)
 
     # Ghi ra file tạm

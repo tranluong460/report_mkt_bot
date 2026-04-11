@@ -31,6 +31,11 @@ def send_telegram_message(
         return {"ok": False}
 
 
+def send_html(chat_id: int, text: str, thread_id: int | None = None) -> dict:
+    """Helper gửi message HTML parse mode (dùng phổ biến trong commands)."""
+    return send_telegram_message(chat_id, text, thread_id, parse_mode="HTML")
+
+
 def edit_message(chat_id: int, message_id: int, text: str, parse_mode: str = "Markdown") -> dict:
     try:
         response = _client.post(

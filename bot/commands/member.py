@@ -3,8 +3,8 @@
 import re
 from html import escape
 
-from bot.store import get_members, add_member, remove_member
-from bot.telegram import send_telegram_message, delete_message
+from bot.core.store import get_members, add_member, remove_member
+from bot.core.telegram import send_telegram_message, delete_message
 from bot import messages
 
 

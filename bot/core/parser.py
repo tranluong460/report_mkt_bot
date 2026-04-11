@@ -4,13 +4,14 @@ import re
 from datetime import datetime
 
 from bot.config import VN_TZ
-from bot.constants import REPORT_SECTIONS, PROJECT_SECTIONS, GLOBAL_SECTIONS
+from bot.constants import REPORT_SECTIONS, PROJECT_SECTIONS, GLOBAL_SECTIONS, DATE_FORMAT_DISPLAY
 
 _PROJECT_HEADER_RE = re.compile(r"^\[.+?\]\s+(.+)")
 
 
 def _new_project(name: str) -> dict:
-    return {"name": name, "done": [], "doing": [], "issue": []}
+    """Tạo dict project mới với các section từ PROJECT_SECTIONS."""
+    return {"name": name, **{section: [] for section in PROJECT_SECTIONS}}
 
 
 def _empty_report() -> dict:
@@ -129,9 +130,12 @@ def get_project_done_items(reports: dict, project_name: str) -> list:
 
 
 def build_summary_message(reports: dict) -> str:
-    """Gộp done items theo project, format tổng hợp ngày."""
+    """Gộp done items theo project, format tổng hợp ngày (HTML parse_mode)."""
+    from bot import messages
+    from html import escape
+
     if not reports:
-        return "Chưa có báo cáo nào hôm nay."
+        return messages.NO_REPORTS_TODAY
 
     projects: dict[str, list] = {}
     for report in reports.values():
@@ -142,14 +146,14 @@ def build_summary_message(reports: dict) -> str:
                 projects.setdefault(name, []).extend(done_items)
 
     if not projects:
-        return "Chưa có task done nào hôm nay."
+        return messages.NO_DONE_TODAY
 
-    today = datetime.now(VN_TZ).strftime("%d/%m/%Y")
-    parts = [f"📋 *Tổng hợp done {today}*\n"]
+    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
+    parts = [f"📋 <b>Tổng hợp done {today}</b>\n"]
     for project_name, done_items in projects.items():
-        parts.append(f"*{project_name}*")
+        parts.append(f"<b>{escape(project_name)}</b>")
         for i, item in enumerate(done_items, 1):
-            parts.append(f"{i}. {item}")
+            parts.append(f"{i}. {escape(item)}")
         parts.append("")
 
     return "\n".join(parts).strip()

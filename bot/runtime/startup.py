@@ -3,8 +3,8 @@
 import logging
 
 from bot import messages
-from bot.store import get_all_active_builds, clear_active_builds
-from bot.telegram import edit_message_caption
+from bot.core.store import get_all_active_builds, clear_active_builds
+from bot.core.telegram import edit_message_caption
 
 logger = logging.getLogger("bot.startup")
 

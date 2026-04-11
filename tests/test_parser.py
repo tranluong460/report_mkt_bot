@@ -12,7 +12,7 @@ for k in ['BOT_TOKEN', 'GROUP_CHAT_ID', 'TOPIC_ID', 'WEEKLY_TOPIC_ID',
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from bot.parser import parse_report, get_project_done_items, build_summary_message
+from bot.core.parser import parse_report, get_project_done_items, build_summary_message
 
 
 class TestParseReport(unittest.TestCase):

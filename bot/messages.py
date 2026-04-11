@@ -13,6 +13,7 @@ from bot.constants import (
     STEP_ICONS, EMOJI_WHITE_SQUARE, MAX_QUEUE_SIZE, MAX_CONCURRENT_BUILDS,
     FAST_BUILD_THRESHOLD, SLOW_BUILD_THRESHOLD, POPULAR_BUILD_THRESHOLD,
     BOT_COMMANDS, COMMAND_GROUPS,
+    DATE_FORMAT_DISPLAY, LOG_TAIL_LINES,
 )
 
 
@@ -37,9 +38,9 @@ def popularity_badge(project: str, recent_builds: list) -> str:
 # ============ NHẮC NHỞ ============
 
 def daily_reminder() -> str:
-    today = datetime.now(VN_TZ).strftime("%d/%m/%Y")
+    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
     return (
-        f"*{EMOJI_REPORT} Nhắc báo cáo ngày {today}*\n\n"
+        f"<b>{EMOJI_REPORT} Nhắc báo cáo ngày {today}</b>\n\n"
         "Mọi người gửi báo cáo công việc hôm nay vào topic này nhé!"
     )
 
@@ -49,8 +50,8 @@ def weekly_reminder() -> str:
     monday = today - timedelta(days=today.weekday())
     saturday = monday + timedelta(days=5)
     return (
-        f"*{EMOJI_REPORT} Nhắc báo cáo tuần "
-        f"{monday.strftime('%d/%m/%Y')} - {saturday.strftime('%d/%m/%Y')}*\n\n"
+        f"<b>{EMOJI_REPORT} Nhắc báo cáo tuần "
+        f"{monday.strftime(DATE_FORMAT_DISPLAY)} - {saturday.strftime(DATE_FORMAT_DISPLAY)}</b>\n\n"
         "Mọi người gửi báo cáo công việc hôm nay vào topic này nhé!"
     )
 
@@ -60,6 +61,9 @@ def weekly_reminder() -> str:
 REPORT_FORMAT_HELP = (
     "Sai format. Cần có: `date:`, `name:`, và ít nhất 1 project `[A] Tên dự án`"
 )
+
+NO_REPORTS_TODAY = "Chưa có báo cáo nào hôm nay."
+NO_DONE_TODAY = "Chưa có task done nào hôm nay."
 
 
 def missing_report_alert(missing_members: dict) -> str:
@@ -163,7 +167,7 @@ def build_success_caption(project: str, done_items: list,
     Emoji theo duration (⚡ fast / ✅ normal / 🐌 slow) +
     badge 🔥 nếu project build nhiều lần gần đây.
     """
-    today = datetime.now(VN_TZ).strftime("%d/%m/%Y")
+    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
     icon = duration_emoji(duration_seconds)
     badge = popularity_badge(project, recent_builds or [])
     lines = [f"{icon} <b>{escape(project)} - {today}</b>{badge}"]
@@ -315,7 +319,7 @@ def log_not_found(build_id: int) -> str:
 
 
 def log_tail(build_id: int, tail: str) -> str:
-    return f"<b>Build #{build_id} - 40 dòng cuối:</b>\n\n<pre>{escape(tail)}</pre>"
+    return f"<b>Build #{build_id} - {LOG_TAIL_LINES} dòng cuối:</b>\n\n<pre>{escape(tail)}</pre>"
 
 
 # ============ BUILD HISTORY ============

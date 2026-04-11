@@ -8,15 +8,15 @@ import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from bot.config import validate_config, GROUP_CHAT_ID, TOPIC_ID, WEEKLY_TOPIC_ID, BUILD_TOPIC_ID
-from bot.store import db, get_today_reports
+from bot.core.store import db, get_today_reports
 from bot.constants import BOT_COMMANDS
-from bot.telegram import delete_webhook, send_telegram_message, set_my_commands
-from bot.parser import build_summary_message
+from bot.core.telegram import delete_webhook, send_html, set_my_commands
+from bot.core.parser import build_summary_message
 from bot import messages
-from bot.startup import cleanup_orphan_builds
+from bot.runtime.startup import cleanup_orphan_builds
 from bot.builder.queue import BuildQueue
 from bot.builder.worker import BuildWorker
-from bot.poller import run_polling
+from bot.runtime.poller import run_polling
 
 
 def setup_logging():
@@ -61,32 +61,23 @@ stop_event = threading.Event()
 
 def send_daily_reminder():
     logger.info("Sending daily reminder...")
-    send_telegram_message(
-        int(GROUP_CHAT_ID), messages.daily_reminder(), int(TOPIC_ID),
-        parse_mode="Markdown",
-    )
+    send_html(GROUP_CHAT_ID, messages.daily_reminder(), TOPIC_ID)
 
 
 def send_weekly_reminder():
     logger.info("Sending weekly reminder...")
-    send_telegram_message(
-        int(GROUP_CHAT_ID), messages.weekly_reminder(), int(WEEKLY_TOPIC_ID),
-        parse_mode="Markdown",
-    )
+    send_html(GROUP_CHAT_ID, messages.weekly_reminder(), WEEKLY_TOPIC_ID)
 
 
 def send_daily_summary():
     logger.info("Sending daily summary...")
     reports = get_today_reports()
     msg = build_summary_message(reports)
-    send_telegram_message(
-        int(GROUP_CHAT_ID), msg, int(BUILD_TOPIC_ID),
-        parse_mode="Markdown",
-    )
+    send_html(GROUP_CHAT_ID, msg, BUILD_TOPIC_ID)
 
 
 def setup_scheduler() -> BackgroundScheduler:
-    from bot.scheduled import send_missing_report_alert
+    from bot.runtime.scheduled import send_missing_report_alert
     scheduler = BackgroundScheduler(timezone="UTC")
     # Nhắc ngày: 16:00 VN T2-T6 (09:00 UTC)
     scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=0, day_of_week="mon-fri")
