@@ -111,6 +111,44 @@ def send_document(
         return {"ok": False}
 
 
+def send_media_group(
+    chat_id: int,
+    files: list[str],
+    caption: str = "",
+    thread_id: int | None = None,
+    parse_mode: str = "HTML",
+) -> dict:
+    """Gửi nhóm file. Caption đặt trên item cuối cùng."""
+    try:
+        media = []
+        file_uploads = {}
+        last = len(files) - 1
+        for i, fp in enumerate(files):
+            attach_key = f"file{i}"
+            entry = {"type": "document", "media": f"attach://{attach_key}"}
+            if i == last:
+                entry["caption"] = caption
+                entry["parse_mode"] = parse_mode
+            media.append(entry)
+            file_uploads[attach_key] = open(fp, "rb")
+
+        data = {"chat_id": str(chat_id), "media": json.dumps(media)}
+        if thread_id is not None:
+            data["message_thread_id"] = str(thread_id)
+
+        response = _client.post(
+            f"{TELEGRAM_API}/sendMediaGroup",
+            data=data,
+            files=file_uploads,
+        )
+        for f in file_uploads.values():
+            f.close()
+        return response.json()
+    except (httpx.HTTPError, FileNotFoundError) as e:
+        logger.warning(f"sendMediaGroup failed: {e}")
+        return {"ok": False}
+
+
 def edit_message_media(
     chat_id: int,
     message_id: int,
