@@ -9,12 +9,16 @@ from bot.telegram import send_telegram_message
 from bot import messages
 
 
+def _send(chat_id, text, thread_id):
+    send_telegram_message(chat_id, text, thread_id, parse_mode="HTML")
+
+
 def _require_admin(handler):
     """Decorator: chỉ admin mới gọi được."""
     @wraps(handler)
     def wrapper(chat_id, thread_id, user_id, *args, **kwargs):
         if ADMIN_USER_ID and user_id != str(ADMIN_USER_ID):
-            send_telegram_message(chat_id, "Chỉ admin mới dùng được lệnh này.", thread_id)
+            _send(chat_id, messages.ADMIN_ONLY, thread_id)
             return
         return handler(chat_id, thread_id, user_id, *args, **kwargs)
     return wrapper
@@ -30,7 +34,7 @@ def handle_debug(chat_id, thread_id, user_id):
     reporters = [r.get("name", uid) for uid, r in reports.items()]
     authorized = get_build_authorized()
 
-    msg = messages.debug_info(
+    _send(chat_id, messages.debug_info(
         redis_ok=redis_ok,
         topic_id=TOPIC_ID,
         build_topic_id=BUILD_TOPIC_ID,
@@ -39,8 +43,7 @@ def handle_debug(chat_id, thread_id, user_id):
         report_count=len(reports),
         reporters=reporters,
         auth_count=len(authorized),
-    )
-    send_telegram_message(chat_id, msg, thread_id, parse_mode="HTML")
+    ), thread_id)
 
 
 # ============ /build_auth ============
@@ -49,18 +52,12 @@ def handle_debug(chat_id, thread_id, user_id):
 def handle_build_auth(chat_id, thread_id, user_id, text):
     parts = text.strip().split()
     if len(parts) < 2:
-        send_telegram_message(
-            chat_id, "<b>Cú pháp:</b> <code>/build_auth &lt;user_id&gt;</code>",
-            thread_id, parse_mode="HTML",
-        )
+        _send(chat_id, messages.BUILD_AUTH_SYNTAX, thread_id)
         return
 
     target_id = parts[1]
     add_build_authorized(target_id)
-    send_telegram_message(
-        chat_id, f"User <code>{target_id}</code> đã được cấp quyền build.",
-        thread_id, parse_mode="HTML",
-    )
+    _send(chat_id, messages.build_auth_success(target_id), thread_id)
 
 
 # ============ /build_unauth ============
@@ -69,21 +66,15 @@ def handle_build_auth(chat_id, thread_id, user_id, text):
 def handle_build_unauth(chat_id, thread_id, user_id, text):
     parts = text.strip().split()
     if len(parts) < 2:
-        send_telegram_message(
-            chat_id, "<b>Cú pháp:</b> <code>/build_unauth &lt;user_id&gt;</code>",
-            thread_id, parse_mode="HTML",
-        )
+        _send(chat_id, messages.BUILD_UNAUTH_SYNTAX, thread_id)
         return
 
     target_id = parts[1]
     remove_build_authorized(target_id)
-    send_telegram_message(
-        chat_id, f"User <code>{target_id}</code> đã bị xoá quyền build.",
-        thread_id, parse_mode="HTML",
-    )
+    _send(chat_id, messages.build_unauth_success(target_id), thread_id)
 
 
 # ============ /help ============
 
 def handle_help(chat_id, thread_id):
-    send_telegram_message(chat_id, messages.HELP_TEXT, thread_id, parse_mode="HTML")
+    _send(chat_id, messages.HELP_TEXT, thread_id)

@@ -6,7 +6,7 @@ import threading
 from datetime import datetime
 
 from bot.config import VN_TZ, BUILD_TOPIC_ID, LOG_TOPIC_ID, GROUP_CHAT_ID, BUILD_LOG_DIR
-from bot.constants import STEP_ICONS
+from bot.constants import STEP_ICONS, MAX_CONCURRENT_BUILDS
 from bot.telegram import (
     send_telegram_message, edit_message_caption, send_document,
     edit_message_media, delete_message,
@@ -21,19 +21,23 @@ logger = logging.getLogger("bot.worker")
 
 
 class BuildWorker:
-    def __init__(self, build_queue: BuildQueue):
+    def __init__(self, build_queue: BuildQueue, num_workers: int = MAX_CONCURRENT_BUILDS):
         self._queue = build_queue
-        self._thread: threading.Thread | None = None
+        self._num_workers = num_workers
+        self._threads: list[threading.Thread] = []
         self._stop = threading.Event()
 
     def start(self):
-        self._thread = threading.Thread(target=self._run, daemon=True, name="build-worker")
-        self._thread.start()
+        for i in range(self._num_workers):
+            t = threading.Thread(target=self._run, daemon=True, name=f"build-worker-{i+1}")
+            t.start()
+            self._threads.append(t)
+        logger.info(f"Started {self._num_workers} build workers")
 
     def stop(self):
         self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=5)
+        for t in self._threads:
+            t.join(timeout=5)
 
     def _run(self):
         while not self._stop.is_set():
@@ -46,7 +50,7 @@ class BuildWorker:
                 logger.exception(f"Build #{job.build_id} crashed")
                 self._report_system_error(job, str(e))
             finally:
-                self._queue.done()
+                self._queue.done(job.project)
 
     def _process_job(self, job: BuildJob):
         chat_id = int(GROUP_CHAT_ID)
@@ -99,7 +103,7 @@ class BuildWorker:
         ensure_log_dir()
         log_path = os.path.join(BUILD_LOG_DIR, f"build-{job.build_id}.log")
         with open(log_path, "w", encoding="utf-8") as f:
-            f.write(f"Build #{job.build_id} - {job.project} ({job.branch}) - đang chờ...\n")
+            f.write(messages.placeholder_log_content(job.build_id, job.project, job.branch))
 
         caption = messages.build_waiting(job.build_id, job.project, job.branch)
         result = send_document(chat_id, log_path, caption=caption, thread_id=thread_id, parse_mode="HTML")
@@ -171,7 +175,7 @@ class BuildWorker:
         if dist["latest"]:
             send_document(
                 chat_id, dist["latest"],
-                caption=f"Build #{job.build_id} - {os.path.basename(dist['latest'])}",
+                caption=messages.latest_yml_caption(job.build_id, os.path.basename(dist['latest'])),
                 thread_id=build_thread_id,
             )
 

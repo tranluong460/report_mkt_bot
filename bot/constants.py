@@ -37,7 +37,8 @@ TTL_BUILDS_RECENT = 604800   # 7 ngày
 MAX_RECENT_BUILDS = 20
 
 # --- Build ---
-MAX_QUEUE_SIZE = 5
+MAX_QUEUE_SIZE = 10
+MAX_CONCURRENT_BUILDS = 5    # Số build chạy song song (khác project)
 BUILD_TIMEOUT = 1800         # 30 phút
 REDIS_TIMEOUT = 5
 

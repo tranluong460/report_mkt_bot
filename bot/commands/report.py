@@ -22,7 +22,7 @@ def handle_report(chat_id, message_id, thread_id, text, user_id, first_name) -> 
             react_to_message(chat_id, message_id, EMOJI_THUMBS_UP)
         else:
             react_to_message(chat_id, message_id, EMOJI_THINKING)
-            send_telegram_message(chat_id, messages.report_format_help(), thread_id)
+            send_telegram_message(chat_id, messages.REPORT_FORMAT_HELP, thread_id)
     else:
         react_to_message(chat_id, message_id, EMOJI_THINKING)
 

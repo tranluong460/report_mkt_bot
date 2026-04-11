@@ -25,7 +25,7 @@ def handle_all(chat_id, thread_id, message_id, text):
     members = get_members()
 
     if not members:
-        send_telegram_message(chat_id, messages.no_members(), thread_id)
+        send_telegram_message(chat_id, messages.NO_MEMBERS, thread_id)
         return
 
     mentions = "".join(
