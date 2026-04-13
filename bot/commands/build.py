@@ -349,9 +349,6 @@ def handle_edit(chat_id, thread_id, message_id, text, reply_to_message_id):
 
     # Lấy nội dung sau /edit (bỏ dòng đầu nếu chỉ có "/edit")
     new_caption = text.split("\n", 1)[1].strip() if "\n" in text else text.split(None, 1)[1] if len(text.split()) > 1 else ""
-    if not new_caption:
-        send_html(chat_id, messages.EDIT_EMPTY, thread_id)
-        return
-
-    edit_message_caption(chat_id, reply_to_message_id, new_caption)
+    # Nội dung trống → xóa caption (giữ file)
+    edit_message_caption(chat_id, reply_to_message_id, new_caption or "")
     delete_message(chat_id, message_id)
