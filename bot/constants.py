@@ -37,7 +37,6 @@ STEP_ICONS = {
 
 KEY_MEMBERS = "members"                  # Hash: user_id → {first_name, username}
 KEY_REPORT_PREFIX = "reports"            # Hash: reports:YYYY-MM-DD → user_id → report
-KEY_BUILD_AUTH = "build:authorized"      # Set: user_id có quyền build
 KEY_BUILD_COUNTER = "build:counter"      # Int: auto-increment build_id
 KEY_BUILDS_RECENT = "builds:recent"      # List: JSON của N builds gần nhất
 KEY_BUILD_ACTIVE = "build:active"        # Hash: build_id → info để cleanup khi restart
@@ -150,14 +149,12 @@ BOT_COMMANDS = [
      f"Lịch sử {MAX_RECENT_BUILDS} build gần đây", "Build"),
     ("stats", "Thống kê build",
      "Thống kê build (tổng, theo project, top users)", "Build"),
+    ("edit", "Sửa caption tin nhắn build",
+     "Reply vào tin nhắn build + nội dung mới", "Build"),
 
     # Admin
     ("debug", "Trạng thái hệ thống (admin)",
      "Trạng thái hệ thống (Redis, reports, quyền)", "Admin"),
-    ("build_auth", "Cấp quyền build (admin)",
-     "<code>&lt;user_id&gt;</code> Cấp quyền build cho user", "Admin"),
-    ("build_unauth", "Xoá quyền build (admin)",
-     "<code>&lt;user_id&gt;</code> Xoá quyền build", "Admin"),
     ("topic_auth", "Cấp quyền nhắn tin topic (admin)",
      "<code>&lt;topic_id&gt; &lt;user_id&gt;</code> Cấp quyền nhắn tin vào topic", "Admin"),
     ("topic_unauth", "Xoá quyền nhắn tin topic (admin)",

@@ -1,6 +1,5 @@
 """Export commands: /export - xuất báo cáo hôm nay ra file."""
 
-import json
 import os
 import tempfile
 from datetime import datetime

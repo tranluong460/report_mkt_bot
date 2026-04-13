@@ -11,14 +11,13 @@ from bot.core.telegram import get_updates, answer_callback_query, delete_message
 from bot.commands.report import handle_report
 from bot.commands.member import handle_follow, handle_unfollow, handle_all
 from bot.commands.admin import (
-    handle_debug, handle_build_auth, handle_build_unauth,
-    handle_help, handle_health,
+    handle_debug, handle_help, handle_health,
     handle_topic_auth, handle_topic_unauth, handle_topic_acl,
 )
 from bot.commands.build import (
     handle_build, handle_cancel, handle_queue, handle_status,
     handle_log, handle_build_history, handle_retry, handle_stats,
-    handle_retry_callback,
+    handle_retry_callback, handle_edit,
 )
 from bot.commands.export import handle_export
 from bot.builder.queue import BuildQueue
@@ -41,6 +40,7 @@ def _extract_message(update: dict) -> dict | None:
     if str(chat_id) != str(GROUP_CHAT_ID):
         return None
 
+    reply = message.get("reply_to_message")
     return {
         "text": message.get("text", ""),
         "chat_id": chat_id,
@@ -49,6 +49,7 @@ def _extract_message(update: dict) -> dict | None:
         "user_id": user_id,
         "first_name": user.get("first_name", ""),
         "username": user.get("username", ""),
+        "reply_to_message_id": reply.get("message_id") if reply else None,
     }
 
 
@@ -88,6 +89,7 @@ def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
     first_name = ctx["first_name"]
     username = ctx["username"]
     message_id = ctx["message_id"]
+    reply_to = ctx["reply_to_message_id"]
 
     handlers = {
         "/help":          lambda: handle_help(chat_id, thread_id),
@@ -105,8 +107,7 @@ def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
         "/build_history": lambda: handle_build_history(chat_id, thread_id),
         "/stats":         lambda: handle_stats(chat_id, thread_id),
         "/export":        lambda: handle_export(chat_id, thread_id),
-        "/build_auth":    lambda: handle_build_auth(chat_id, thread_id, user_id, text),
-        "/build_unauth":  lambda: handle_build_unauth(chat_id, thread_id, user_id, text),
+        "/edit":          lambda: handle_edit(chat_id, thread_id, message_id, text, reply_to),
         "/topic_auth":    lambda: handle_topic_auth(chat_id, thread_id, user_id, text),
         "/topic_unauth":  lambda: handle_topic_unauth(chat_id, thread_id, user_id, text),
         "/topic_acl":     lambda: handle_topic_acl(chat_id, thread_id, user_id, text),

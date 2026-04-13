@@ -1,26 +1,38 @@
 """Build commands: /build, /cancel, /queue, /status, /log, /build_history."""
 
 import os
+from threading import Timer
 
-from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
-from bot.constants import LOG_TAIL_LINES, MAX_RECENT_BUILDS
+from bot.config import BUILD_TOPIC_ID, BUILD_LOG_DIR
+from bot.constants import LOG_TAIL_LINES, MAX_RECENT_BUILDS, TTL_TOPIC_ACL_WARNING
 from bot.core.store import (
-    get_build_authorized, next_build_id, get_recent_builds,
+    next_build_id, get_recent_builds,
     register_active_build, get_today_reports,
 )
 from bot.core.parser import has_today_report_for_project
-from bot.core.telegram import send_html, send_document, edit_message_media, delete_message
+from bot.core.telegram import send_html, send_document, edit_message_media, edit_message_caption, delete_message
 from bot import messages
 from bot.builder.queue import BuildJob
 from bot.builder.executor import validate_project, ensure_log_dir, get_log_tail
 
 
+# ============ helpers ============
+
+def _send_ephemeral(chat_id, text, thread_id):
+    """Gửi tin nhắn tạm, tự xóa sau 3s."""
+    result = send_html(chat_id, text, thread_id)
+    msg_id = result.get("result", {}).get("message_id") if result.get("ok") else None
+    if msg_id:
+        Timer(TTL_TOPIC_ACL_WARNING, delete_message, [chat_id, msg_id]).start()
+
+
 # ============ /build ============
 
 def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, build_queue):
+    # Xoá command message ngay lập tức
+    delete_message(chat_id, message_id)
+
     if not _check_build_topic(chat_id, thread_id):
-        return
-    if not _check_build_auth(chat_id, thread_id, user_id):
         return
 
     # Parse args: trả về list tuple (project, branch)
@@ -30,17 +42,8 @@ def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, buil
     if not _check_daily_report_for_projects(chat_id, thread_id, jobs_spec):
         return
 
-    # Multi-build: xoá command message ngay sau khi parse OK (không cần chờ)
-    # Single-build: để worker xoá sau khi build xong
-    is_multi = len(jobs_spec) > 1
-    if is_multi:
-        delete_message(chat_id, message_id)
-        cmd_msg_id = None
-    else:
-        cmd_msg_id = message_id
-
     for project, branch in jobs_spec:
-        _enqueue_build(chat_id, thread_id, cmd_msg_id, user_id, first_name,
+        _enqueue_build(chat_id, thread_id, None, user_id, first_name,
                        project, branch, build_queue)
 
 
@@ -49,7 +52,7 @@ def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
     """Tạo 1 build job và thêm vào queue. Trả về True nếu thành công."""
     build_id = next_build_id()
     if build_id == 0:
-        send_html(chat_id, messages.BUILD_REDIS_ERROR, thread_id)
+        _send_ephemeral(chat_id, messages.BUILD_REDIS_ERROR, thread_id)
         return False
 
     job = BuildJob(
@@ -61,7 +64,7 @@ def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
 
     # Check duplicate TRƯỚC khi gửi placeholder (tránh spam message)
     if build_queue.is_project_active(project):
-        send_html(chat_id, messages.build_duplicate(project), thread_id)
+        _send_ephemeral(chat_id, messages.build_duplicate(project), thread_id)
         return False
 
     placeholder_path = _create_placeholder(build_id, project, branch)
@@ -97,15 +100,7 @@ def _enqueue_build(chat_id, thread_id, command_message_id, user_id, first_name,
 
 def _check_build_topic(chat_id, thread_id) -> bool:
     if BUILD_TOPIC_ID and thread_id and str(thread_id) != str(BUILD_TOPIC_ID):
-        send_html(chat_id, messages.BUILD_NOT_IN_TOPIC, thread_id)
-        return False
-    return True
-
-
-def _check_build_auth(chat_id, thread_id, user_id) -> bool:
-    authorized = get_build_authorized()
-    if user_id not in authorized and str(ADMIN_USER_ID) != str(user_id):
-        send_html(chat_id, messages.BUILD_NO_AUTH, thread_id)
+        _send_ephemeral(chat_id, messages.BUILD_NOT_IN_TOPIC, thread_id)
         return False
     return True
 
@@ -122,7 +117,7 @@ def _check_daily_report_for_projects(chat_id, thread_id, jobs_spec: list[tuple[s
         if not has_today_report_for_project(reports, project):
             missing.append(project)
     if missing:
-        send_html(chat_id, messages.build_no_report_projects(missing), thread_id)
+        _send_ephemeral(chat_id, messages.build_no_report_projects(missing), thread_id)
         return False
     return True
 
@@ -138,14 +133,14 @@ def _parse_build_args(chat_id, thread_id, text) -> list | None:
     """
     parts = text.strip().split()[1:]  # bỏ /build
     if not parts:
-        send_html(chat_id, messages.BUILD_SYNTAX, thread_id)
+        _send_ephemeral(chat_id, messages.BUILD_SYNTAX, thread_id)
         return None
 
     # Case 1: chỉ 1 arg → single project
     if len(parts) == 1:
         project = parts[0]
         if validate_project(project):
-            send_html(chat_id, messages.build_project_not_found(project), thread_id)
+            _send_ephemeral(chat_id, messages.build_project_not_found(project), thread_id)
             return None
         return [(project, "main")]
 
@@ -153,7 +148,7 @@ def _parse_build_args(chat_id, thread_id, text) -> list | None:
     if len(parts) == 2:
         first, second = parts
         if validate_project(first):
-            send_html(chat_id, messages.build_project_not_found(first), thread_id)
+            _send_ephemeral(chat_id, messages.build_project_not_found(first), thread_id)
             return None
         # arg2 là project hợp lệ → multi-build
         if not validate_project(second):
@@ -169,7 +164,7 @@ def _parse_build_args(chat_id, thread_id, text) -> list | None:
             continue  # Bỏ qua duplicate
         seen.add(p)
         if validate_project(p):
-            send_html(chat_id, messages.build_project_not_found(p), thread_id)
+            _send_ephemeral(chat_id, messages.build_project_not_found(p), thread_id)
             return None
         jobs.append((p, "main"))
     return jobs
@@ -203,8 +198,6 @@ def _send_placeholder(chat_id, thread_id, path, build_id, project, branch) -> in
 def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, build_queue):
     """Retry 1 build thất bại. Tìm trong build history → tạo job mới cùng project/branch."""
     if not _check_build_topic(chat_id, thread_id):
-        return
-    if not _check_build_auth(chat_id, thread_id, user_id):
         return
 
     parts = text.strip().split()
@@ -248,9 +241,6 @@ def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, buil
 
 def handle_retry_callback(chat_id, msg_id, build_id, user_id, first_name, build_queue):
     """Retry qua inline button. Trả về (success, message)."""
-    if not _is_build_authorized(user_id):
-        return False, "Bạn chưa được cấp quyền build"
-
     history = get_recent_builds(MAX_RECENT_BUILDS)
     target = next((b for b in history if b.get("id") == build_id), None)
     if not target:
@@ -274,11 +264,6 @@ def handle_retry_callback(chat_id, msg_id, build_id, user_id, first_name, build_
     _enqueue_build(chat_id, thread_id, None, user_id, first_name,
                    project, branch, build_queue)
     return True, f"Đang retry Build #{build_id}"
-
-
-def _is_build_authorized(user_id) -> bool:
-    authorized = get_build_authorized()
-    return user_id in authorized or str(ADMIN_USER_ID) == str(user_id)
 
 
 # ============ /cancel ============
@@ -352,3 +337,21 @@ def handle_build_history(chat_id, thread_id):
 def handle_stats(chat_id, thread_id):
     builds = get_recent_builds(MAX_RECENT_BUILDS)
     send_html(chat_id, messages.build_stats(builds), thread_id)
+
+
+# ============ /edit ============
+
+def handle_edit(chat_id, thread_id, message_id, text, reply_to_message_id):
+    """Edit caption của tin nhắn build. User reply vào tin nhắn build rồi gõ /edit + nội dung mới."""
+    if not reply_to_message_id:
+        send_html(chat_id, messages.EDIT_SYNTAX, thread_id)
+        return
+
+    # Lấy nội dung sau /edit (bỏ dòng đầu nếu chỉ có "/edit")
+    new_caption = text.split("\n", 1)[1].strip() if "\n" in text else text.split(None, 1)[1] if len(text.split()) > 1 else ""
+    if not new_caption:
+        send_html(chat_id, messages.EDIT_EMPTY, thread_id)
+        return
+
+    edit_message_caption(chat_id, reply_to_message_id, new_caption)
+    delete_message(chat_id, message_id)

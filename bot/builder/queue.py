@@ -20,7 +20,6 @@ class BuildJob:
     chat_id: int
     thread_id: int | None
     message_id: int | None = None          # message placeholder (document)
-    message_id_2: int | None = None        # backup
     command_message_id: int | None = None  # message /build của user
     created_at: str = field(
         default_factory=lambda: datetime.now(VN_TZ).strftime(DATE_FORMAT_JOB)

@@ -42,13 +42,6 @@ else:
 # --- Timezone Vietnam (UTC+7) ---
 VN_TZ = timezone(timedelta(hours=7))
 
-# --- Redis keys ---
-KV_KEY = "members"
-REPORT_KEY_PREFIX = "reports"
-BUILD_AUTH_KEY = "build:authorized"
-BUILD_COUNTER_KEY = "build:counter"
-BUILD_PREFIX = "build"
-
 
 def validate_config():
     """Validate tất cả biến môi trường bắt buộc khi khởi động."""

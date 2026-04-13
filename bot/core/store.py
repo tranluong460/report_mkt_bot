@@ -9,7 +9,7 @@ import redis
 
 from bot.config import KV_REDIS_URL, VN_TZ
 from bot.constants import (
-    KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_AUTH, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
+    KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
     KEY_BUILD_ACTIVE, KEY_TOPIC_ACL_PREFIX,
     TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
     DATE_FORMAT_KEY,
@@ -77,24 +77,6 @@ def save_report(user_id: str, report: dict) -> None:
     key = _today_report_key()
     db.hset(key, user_id, json.dumps(report))
     db.expire(key, TTL_REPORT)
-
-
-# ============ BUILD AUTH (Set) ============
-
-@_with_redis(set())
-def get_build_authorized() -> set:
-    members = db.smembers(KEY_BUILD_AUTH)
-    return {m.decode() for m in members} if members else set()
-
-
-@_with_redis(None)
-def add_build_authorized(user_id: str) -> None:
-    db.sadd(KEY_BUILD_AUTH, user_id)
-
-
-@_with_redis(None)
-def remove_build_authorized(user_id: str) -> None:
-    db.srem(KEY_BUILD_AUTH, user_id)
 
 
 # ============ BUILD RECORDS (List) ============
@@ -190,3 +172,21 @@ def enable_topic_acl(thread_id) -> None:
 def disable_topic_acl(thread_id) -> None:
     """Tắt ACL cho topic (xóa key → topic mở cho tất cả)."""
     db.delete(_topic_acl_key(thread_id))
+
+
+@_with_redis({})
+def get_all_topic_acls() -> dict:
+    """Trả về dict {topic_id: set(user_ids)} cho tất cả topic có ACL."""
+    result = {}
+    cursor = 0
+    pattern = f"{KEY_TOPIC_ACL_PREFIX}:*"
+    while True:
+        cursor, keys = db.scan(cursor, match=pattern, count=100)
+        for key in keys:
+            topic_id = key.decode().split(":", 2)[2]
+            members = db.smembers(key)
+            user_ids = {m.decode() for m in members if m.decode() != "__acl_enabled__"} if members else set()
+            result[topic_id] = user_ids
+        if cursor == 0:
+            break
+    return result

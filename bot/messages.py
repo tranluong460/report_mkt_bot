@@ -9,13 +9,29 @@ from html import escape
 from bot.config import VN_TZ
 from bot.constants import (
     EMOJI_REPORT, EMOJI_CHECK, EMOJI_CROSS, EMOJI_HAMMER, EMOJI_HOURGLASS, EMOJI_WARNING,
-    EMOJI_ROCKET, EMOJI_LIGHTNING, EMOJI_SNAIL, EMOJI_FIRE, EMOJI_TROPHY, EMOJI_PACKAGE,
+    EMOJI_ROCKET, EMOJI_LIGHTNING, EMOJI_SNAIL,
     STEP_ICONS, EMOJI_WHITE_SQUARE, MAX_QUEUE_SIZE, MAX_CONCURRENT_BUILDS,
-    FAST_BUILD_THRESHOLD, SLOW_BUILD_THRESHOLD, POPULAR_BUILD_THRESHOLD,
+    FAST_BUILD_THRESHOLD, SLOW_BUILD_THRESHOLD,
     BOT_COMMANDS, COMMAND_GROUPS,
     DATE_FORMAT_DISPLAY, LOG_TAIL_LINES,
     SCHEDULE_JOBS, UTC_OFFSET_VN,
 )
+
+import re
+
+
+def format_project_name(slug: str) -> str:
+    """Chuyển slug dự án thành tên hiển thị.
+
+    mkt-group-2025 → MKT Group
+    mkt-care-2025  → MKT Care
+    mkt-post-2026  → MKT Post
+    """
+    # Bỏ phần năm cuối (4 chữ số)
+    name = re.sub(r"-\d{4}$", "", slug)
+    parts = name.split("-")
+    # Phần đầu viết hoa (MKT), các phần sau title case
+    return " ".join(p.upper() if i == 0 else p.title() for i, p in enumerate(parts))
 
 
 def duration_emoji(seconds: float) -> str:
@@ -26,14 +42,6 @@ def duration_emoji(seconds: float) -> str:
     if seconds > SLOW_BUILD_THRESHOLD:
         return EMOJI_SNAIL
     return EMOJI_CHECK
-
-
-def popularity_badge(project: str, recent_builds: list) -> str:
-    """Trả về badge nếu project là popular (build nhiều trong history)."""
-    count = sum(1 for b in recent_builds if b.get("project") == project and b.get("success"))
-    if count >= POPULAR_BUILD_THRESHOLD:
-        return f" {EMOJI_FIRE}"
-    return ""
 
 
 # ============ NHẮC NHỞ ============
@@ -107,14 +115,6 @@ def build_waiting(build_id: int, project: str, branch: str) -> str:
     )
 
 
-def build_starting(build_id: int, project: str, branch: str) -> str:
-    return (
-        f"{EMOJI_ROCKET} <b>Build #{build_id}</b> bắt đầu chạy\n"
-        f"Dự án: <code>{escape(project)}</code>\n"
-        f"Branch: <code>{escape(branch)}</code>"
-    )
-
-
 def build_queued(build_id: int, project: str, branch: str, position: int) -> str:
     return (
         f"<b>Build #{build_id}</b> đã thêm vào hàng đợi (vị trí #{position})\n"
@@ -140,7 +140,6 @@ def build_duplicate(project: str) -> str:
     return f"Dự án <code>{escape(project)}</code> đang chạy hoặc trong hàng đợi, không thể thêm lại."
 BUILD_REDIS_ERROR = "Lỗi Redis, không tạo được build ID."
 BUILD_NOT_IN_TOPIC = "Lệnh /build chỉ dùng được trong Build topic."
-BUILD_NO_AUTH = "Bạn chưa được cấp quyền build. Liên hệ admin dùng /build_auth."
 
 
 def build_no_report_projects(projects: list[str]) -> str:
@@ -177,7 +176,8 @@ def build_success_caption(project: str, done_items: list,
                           recent_builds: list | None = None) -> str:
     """Caption khi build thành công - liệt kê done items của project."""
     today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
-    lines = [f"<b>{escape(project)} - {today}</b>"]
+    display_name = format_project_name(project)
+    lines = [f"<b>{escape(display_name)} - {today}</b>"]
     if done_items:
         for i, item in enumerate(done_items, 1):
             lines.append(f"{i}. {escape(item)}")
@@ -241,10 +241,6 @@ def build_log_final(build_id: int, project: str, branch: str, user: str, duratio
 
 def build_system_error(build_id: int, error: str) -> str:
     return f"{EMOJI_WARNING} <b>Build #{build_id} LỖI HỆ THỐNG:</b> {escape(error)}"
-
-
-def latest_yml_caption(build_id: int, filename: str) -> str:
-    return f"Build #{build_id} - {filename}"
 
 
 def placeholder_log_content(build_id: int, project: str, branch: str) -> str:
@@ -404,17 +400,6 @@ def build_history(builds: list) -> str:
 
 ADMIN_ONLY = "Chỉ admin mới dùng được lệnh này."
 
-BUILD_AUTH_SYNTAX = "<b>Cú pháp:</b> <code>/build_auth &lt;user_id&gt;</code>"
-BUILD_UNAUTH_SYNTAX = "<b>Cú pháp:</b> <code>/build_unauth &lt;user_id&gt;</code>"
-
-
-def build_auth_success(user_id: str) -> str:
-    return f"User <code>{user_id}</code> đã được cấp quyền build."
-
-
-def build_unauth_success(user_id: str) -> str:
-    return f"User <code>{user_id}</code> đã bị xoá quyền build."
-
 
 # ============ TOPIC ACL ============
 
@@ -459,6 +444,12 @@ def topic_acl_no_restriction(topic_id: str) -> str:
 
 
 TOPIC_ACL_DENIED = "Bạn không có quyền nhắn tin trong topic này."
+
+
+# ============ EDIT ============
+
+EDIT_SYNTAX = "<b>Cú pháp:</b> Reply vào tin nhắn build rồi gõ:\n<code>/edit\nNội dung mới</code>"
+EDIT_EMPTY = "Nội dung edit không được để trống."
 
 
 # ============ HELP / DEBUG ============
@@ -510,7 +501,8 @@ def _format_schedule() -> str:
 
 def debug_info(redis_ok: bool, topic_id, build_topic_id, log_topic_id, thread_id,
                today: str, report_count: int, reporters: list,
-               auth_count: int, members_count: int, uptime_str: str) -> str:
+               members_count: int, uptime_str: str,
+               topic_acl_info: dict | None = None) -> str:
     redis_icon = EMOJI_CHECK if redis_ok else EMOJI_CROSS
     lines = [
         f"{EMOJI_HAMMER} <b>Debug - Thông tin hệ thống</b>",
@@ -533,7 +525,15 @@ def debug_info(redis_ok: bool, topic_id, build_topic_id, log_topic_id, thread_id
         "",
         "<b>Quyền:</b>",
         f"  Members: <b>{members_count}</b>",
-        f"  Build auth: <b>{auth_count}</b>",
+    ]
+    if topic_acl_info:
+        lines.append("")
+        lines.append("<b>Topic ACL:</b>")
+        for tid, uids in topic_acl_info.items():
+            lines.append(f"  Topic <code>{tid}</code>: <b>{len(uids)}</b> user")
+    else:
+        lines.append("  Topic ACL: <i>chưa thiết lập</i>")
+    lines += [
         "",
         "<b>Schedule (giờ VN):</b>",
         _format_schedule(),
@@ -546,11 +546,18 @@ def debug_info(redis_ok: bool, topic_id, build_topic_id, log_topic_id, thread_id
 def health_status(redis_ok: bool, members_count: int, running_count: int,
                   pending_count: int, uptime_str: str) -> str:
     redis_icon = EMOJI_CHECK if redis_ok else EMOJI_CROSS
-    return (
-        f"{EMOJI_HAMMER} <b>Health Check</b>\n\n"
-        f"{redis_icon} Redis: {'OK' if redis_ok else 'DOWN'}\n"
-        f"{EMOJI_CHECK} Workers: <b>{running_count}</b> đang chạy\n"
-        f"{EMOJI_HOURGLASS} Queue: <b>{pending_count}</b> pending\n"
-        f"\U0001f465 Members: <b>{members_count}</b>\n"
-        f"\u23f1 Uptime: <b>{uptime_str}</b>"
-    )
+    lines = [
+        f"{EMOJI_HAMMER} <b>Health Check</b>",
+        "",
+        "<b>Kết nối:</b>",
+        f"  {redis_icon} Redis: {'OK' if redis_ok else 'DOWN'}",
+        "",
+        "<b>Build:</b>",
+        f"  {EMOJI_ROCKET} Workers: <b>{running_count}</b> đang chạy",
+        f"  {EMOJI_HOURGLASS} Queue: <b>{pending_count}</b> pending",
+        "",
+        "<b>Thông tin:</b>",
+        f"  \U0001f465 Members: <b>{members_count}</b>",
+        f"  \u23f1 Uptime: <b>{uptime_str}</b>",
+    ]
+    return "\n".join(lines)

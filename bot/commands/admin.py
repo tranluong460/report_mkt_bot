@@ -7,10 +7,9 @@ from functools import wraps
 from bot.config import TOPIC_ID, BUILD_TOPIC_ID, LOG_TOPIC_ID, ADMIN_USER_ID, VN_TZ
 from bot.constants import DATE_FORMAT_KEY
 from bot.core.store import (
-    db, get_today_reports, get_build_authorized,
-    add_build_authorized, remove_build_authorized, get_members,
+    db, get_today_reports, get_members,
     has_topic_acl, get_topic_acl, add_topic_acl, remove_topic_acl,
-    enable_topic_acl, disable_topic_acl,
+    enable_topic_acl, disable_topic_acl, get_all_topic_acls,
 )
 from bot.core.telegram import send_html
 from bot import messages
@@ -49,8 +48,8 @@ def handle_debug(chat_id, thread_id, user_id):
     reports = get_today_reports() if redis_ok else {}
     today = datetime.now(VN_TZ).strftime(DATE_FORMAT_KEY)
     reporters = [r.get("name", uid) for uid, r in reports.items()]
-    authorized = get_build_authorized()
     members = get_members()
+    topic_acl_info = get_all_topic_acls()
 
     send_html(chat_id, messages.debug_info(
         redis_ok=redis_ok,
@@ -61,38 +60,10 @@ def handle_debug(chat_id, thread_id, user_id):
         today=today,
         report_count=len(reports),
         reporters=reporters,
-        auth_count=len(authorized),
         members_count=len(members),
         uptime_str=_uptime_str(),
+        topic_acl_info=topic_acl_info,
     ), thread_id)
-
-
-# ============ /build_auth ============
-
-@_require_admin
-def handle_build_auth(chat_id, thread_id, user_id, text):
-    parts = text.strip().split()
-    if len(parts) < 2:
-        send_html(chat_id, messages.BUILD_AUTH_SYNTAX, thread_id)
-        return
-
-    target_id = parts[1]
-    add_build_authorized(target_id)
-    send_html(chat_id, messages.build_auth_success(target_id), thread_id)
-
-
-# ============ /build_unauth ============
-
-@_require_admin
-def handle_build_unauth(chat_id, thread_id, user_id, text):
-    parts = text.strip().split()
-    if len(parts) < 2:
-        send_html(chat_id, messages.BUILD_UNAUTH_SYNTAX, thread_id)
-        return
-
-    target_id = parts[1]
-    remove_build_authorized(target_id)
-    send_html(chat_id, messages.build_unauth_success(target_id), thread_id)
 
 
 # ============ /help ============
@@ -141,7 +112,7 @@ def _require_log_topic(handler):
 @_require_log_topic
 def handle_topic_auth(chat_id, thread_id, user_id, text):
     parts = text.strip().split()
-    if len(parts) < 3:
+    if len(parts) < 3 or not parts[2].isdigit():
         send_html(chat_id, messages.TOPIC_AUTH_SYNTAX, thread_id)
         return
 
@@ -155,7 +126,7 @@ def handle_topic_auth(chat_id, thread_id, user_id, text):
 @_require_log_topic
 def handle_topic_unauth(chat_id, thread_id, user_id, text):
     parts = text.strip().split()
-    if len(parts) < 3:
+    if len(parts) < 3 or not parts[2].isdigit():
         send_html(chat_id, messages.TOPIC_UNAUTH_SYNTAX, thread_id)
         return
 
