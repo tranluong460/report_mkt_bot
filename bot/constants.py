@@ -155,6 +155,8 @@ BOT_COMMANDS = [
     # Admin
     ("debug", "Trạng thái hệ thống (admin)",
      "Trạng thái hệ thống (Redis, reports, quyền)", "Admin"),
+    ("members", "Danh sách thành viên (admin)",
+     "Hiển thị tất cả thành viên: ID, tên, username", "Admin"),
     ("topic_auth", "Cấp quyền nhắn tin topic (admin)",
      "<code>&lt;topic_id&gt; &lt;user_id&gt;</code> Cấp quyền nhắn tin vào topic", "Admin"),
     ("topic_unauth", "Xoá quyền nhắn tin topic (admin)",

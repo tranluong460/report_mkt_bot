@@ -11,7 +11,7 @@ from bot.core.telegram import get_updates, answer_callback_query, delete_message
 from bot.commands.report import handle_report
 from bot.commands.member import handle_follow, handle_unfollow, handle_all
 from bot.commands.admin import (
-    handle_debug, handle_help, handle_health,
+    handle_debug, handle_help, handle_health, handle_members,
     handle_topic_auth, handle_topic_unauth, handle_topic_acl,
 )
 from bot.commands.build import (
@@ -95,6 +95,7 @@ def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
         "/help":          lambda: handle_help(chat_id, thread_id),
         "/health":        lambda: handle_health(chat_id, thread_id, build_queue),
         "/debug":         lambda: handle_debug(chat_id, thread_id, user_id),
+        "/members":       lambda: handle_members(chat_id, thread_id, user_id),
         "/follow":        lambda: handle_follow(chat_id, thread_id, user_id, first_name, username),
         "/unfollow":      lambda: handle_unfollow(chat_id, thread_id, user_id, first_name),
         "/all":           lambda: handle_all(chat_id, thread_id, message_id, text),

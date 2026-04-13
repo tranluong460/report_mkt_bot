@@ -401,6 +401,20 @@ def build_history(builds: list) -> str:
 ADMIN_ONLY = "Chỉ admin mới dùng được lệnh này."
 
 
+def members_list(members: dict) -> str:
+    """members: dict {user_id: {first_name, username}}."""
+    lines = [f"<b>Danh sách thành viên ({len(members)}):</b>", ""]
+    for uid in sorted(members.keys()):
+        info = members[uid]
+        name = escape(info.get("first_name", ""))
+        username = info.get("username", "")
+        line = f"  • <code>{uid}</code> — {name}"
+        if username:
+            line += f" (@{escape(username)})"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 # ============ TOPIC ACL ============
 
 TOPIC_ACL_NOT_IN_LOG = "Lệnh này chỉ dùng được trong Log topic."

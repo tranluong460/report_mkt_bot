@@ -66,6 +66,17 @@ def handle_debug(chat_id, thread_id, user_id):
     ), thread_id)
 
 
+# ============ /members ============
+
+@_require_admin
+def handle_members(chat_id, thread_id, user_id):
+    members = get_members()
+    if not members:
+        send_html(chat_id, messages.NO_MEMBERS, thread_id)
+        return
+    send_html(chat_id, messages.members_list(members), thread_id)
+
+
 # ============ /help ============
 
 def handle_help(chat_id, thread_id):
