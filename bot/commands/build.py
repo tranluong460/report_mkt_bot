@@ -6,7 +6,7 @@ from bot.config import BUILD_TOPIC_ID, ADMIN_USER_ID, BUILD_LOG_DIR
 from bot.constants import LOG_TAIL_LINES, MAX_RECENT_BUILDS
 from bot.core.store import (
     get_build_authorized, next_build_id, get_recent_builds,
-    register_active_build,
+    register_active_build, get_today_reports,
 )
 from bot.core.telegram import send_html, send_document, edit_message_media, delete_message
 from bot import messages
@@ -20,6 +20,8 @@ def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, buil
     if not _check_build_topic(chat_id, thread_id):
         return
     if not _check_build_auth(chat_id, thread_id, user_id):
+        return
+    if not _check_daily_report(chat_id, thread_id, user_id):
         return
 
     # Parse args: trả về list tuple (project, branch)
@@ -107,6 +109,14 @@ def _check_build_auth(chat_id, thread_id, user_id) -> bool:
     return True
 
 
+def _check_daily_report(chat_id, thread_id, user_id) -> bool:
+    reports = get_today_reports()
+    if user_id not in reports:
+        send_html(chat_id, messages.BUILD_NO_REPORT, thread_id)
+        return False
+    return True
+
+
 def _parse_build_args(chat_id, thread_id, text) -> list | None:
     """Parse /build args. Trả về list (project, branch) hoặc None nếu lỗi.
 
@@ -186,6 +196,8 @@ def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, buil
         return
     if not _check_build_auth(chat_id, thread_id, user_id):
         return
+    if not _check_daily_report(chat_id, thread_id, user_id):
+        return
 
     parts = text.strip().split()
     if len(parts) < 2:
@@ -228,6 +240,10 @@ def handle_retry_callback(chat_id, msg_id, build_id, user_id, first_name, build_
     """Retry qua inline button. Trả về (success, message)."""
     if not _is_build_authorized(user_id):
         return False, "Bạn chưa được cấp quyền build"
+
+    reports = get_today_reports()
+    if str(user_id) not in reports:
+        return False, "Bạn chưa nộp báo cáo hôm nay, không thể build"
 
     history = get_recent_builds(MAX_RECENT_BUILDS)
     target = next((b for b in history if b.get("id") == build_id), None)

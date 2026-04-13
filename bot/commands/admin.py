@@ -4,7 +4,7 @@ import time
 from datetime import datetime
 from functools import wraps
 
-from bot.config import TOPIC_ID, BUILD_TOPIC_ID, ADMIN_USER_ID, VN_TZ
+from bot.config import TOPIC_ID, BUILD_TOPIC_ID, LOG_TOPIC_ID, ADMIN_USER_ID, VN_TZ
 from bot.constants import DATE_FORMAT_KEY
 from bot.core.store import (
     db, get_today_reports, get_build_authorized,
@@ -48,16 +48,20 @@ def handle_debug(chat_id, thread_id, user_id):
     today = datetime.now(VN_TZ).strftime(DATE_FORMAT_KEY)
     reporters = [r.get("name", uid) for uid, r in reports.items()]
     authorized = get_build_authorized()
+    members = get_members()
 
     send_html(chat_id, messages.debug_info(
         redis_ok=redis_ok,
         topic_id=TOPIC_ID,
         build_topic_id=BUILD_TOPIC_ID,
+        log_topic_id=LOG_TOPIC_ID,
         thread_id=thread_id,
         today=today,
         report_count=len(reports),
         reporters=reporters,
         auth_count=len(authorized),
+        members_count=len(members),
+        uptime_str=_uptime_str(),
     ), thread_id)
 
 

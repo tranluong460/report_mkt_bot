@@ -7,11 +7,10 @@ import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from bot.config import validate_config, GROUP_CHAT_ID, TOPIC_ID, WEEKLY_TOPIC_ID, BUILD_TOPIC_ID
-from bot.core.store import db, get_today_reports
-from bot.constants import BOT_COMMANDS
+from bot.config import validate_config, GROUP_CHAT_ID, TOPIC_ID, WEEKLY_TOPIC_ID
+from bot.core.store import db
+from bot.constants import BOT_COMMANDS, SCHEDULE_JOBS
 from bot.core.telegram import delete_webhook, send_html, set_my_commands
-from bot.core.parser import build_summary_message
 from bot import messages
 from bot.runtime.startup import cleanup_orphan_builds
 from bot.builder.queue import BuildQueue
@@ -69,28 +68,21 @@ def send_weekly_reminder():
     send_html(GROUP_CHAT_ID, messages.weekly_reminder(), WEEKLY_TOPIC_ID)
 
 
-def send_daily_summary():
-    logger.info("Sending daily summary...")
-    reports = get_today_reports()
-    msg = build_summary_message(reports)
-    send_html(GROUP_CHAT_ID, msg, BUILD_TOPIC_ID)
-
-
 def setup_scheduler() -> BackgroundScheduler:
     from bot.runtime.scheduled import send_missing_report_alert
+
+    # Map label → handler function
+    job_handlers = {
+        "Nhắc nộp báo cáo ngày": send_daily_reminder,
+        "Nhắc nộp báo cáo tuần": send_weekly_reminder,
+        "Nhắc chưa nộp báo cáo": send_missing_report_alert,
+    }
+
     scheduler = BackgroundScheduler(timezone="UTC")
-    # Nhắc ngày: 16:00 VN T2-T6 (09:00 UTC)
-    scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=0, day_of_week="mon-fri", misfire_grace_time=300)
-    # Nhắc ngày: 10:00 VN T7 (03:00 UTC)
-    scheduler.add_job(send_daily_reminder, "cron", hour=3, minute=0, day_of_week="sat", misfire_grace_time=300)
-    # Nhắc tuần: 09:00 VN T7 (02:00 UTC)
-    scheduler.add_job(send_weekly_reminder, "cron", hour=2, minute=0, day_of_week="sat", misfire_grace_time=300)
-    # Missing report alert: 21:00 VN T2-T6 (14:00 UTC)
-    scheduler.add_job(send_missing_report_alert, "cron", hour=14, minute=0, day_of_week="mon-fri", misfire_grace_time=300)
-    # Missing report alert: 11:00 VN T7 (04:00 UTC)
-    scheduler.add_job(send_missing_report_alert, "cron", hour=4, minute=0, day_of_week="sat", misfire_grace_time=300)
-    # Tổng hợp: 23:00 VN T2-T7 (16:00 UTC)
-    scheduler.add_job(send_daily_summary, "cron", hour=16, minute=0, day_of_week="mon-sat", misfire_grace_time=300)
+    for label, hour, minute, day_of_week in SCHEDULE_JOBS:
+        handler = job_handlers[label]
+        scheduler.add_job(handler, "cron", hour=hour, minute=minute,
+                          day_of_week=day_of_week, misfire_grace_time=300)
     return scheduler
 
 
@@ -132,7 +124,7 @@ def main():
     # Start scheduler
     scheduler = setup_scheduler()
     scheduler.start()
-    logger.info("Scheduler: daily 16:00 VN (T2-T6) / 10:00 VN (T7), weekly 09:00 VN (T7), missing alert 21:00 VN (T2-T6) / 11:00 VN (T7), summary 23:00 VN (T2-T7)")
+    logger.info(f"Scheduler started: {len(SCHEDULE_JOBS)} jobs")
 
     # Start build worker
     build_queue = BuildQueue()

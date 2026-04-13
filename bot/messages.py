@@ -14,6 +14,7 @@ from bot.constants import (
     FAST_BUILD_THRESHOLD, SLOW_BUILD_THRESHOLD, POPULAR_BUILD_THRESHOLD,
     BOT_COMMANDS, COMMAND_GROUPS,
     DATE_FORMAT_DISPLAY, LOG_TAIL_LINES,
+    SCHEDULE_JOBS, UTC_OFFSET_VN,
 )
 
 
@@ -140,6 +141,7 @@ def build_duplicate(project: str) -> str:
 BUILD_REDIS_ERROR = "Lỗi Redis, không tạo được build ID."
 BUILD_NOT_IN_TOPIC = "Lệnh /build chỉ dùng được trong Build topic."
 BUILD_NO_AUTH = "Bạn chưa được cấp quyền build. Liên hệ admin dùng /build_auth."
+BUILD_NO_REPORT = "Bạn chưa nộp báo cáo hôm nay. Vui lòng nộp báo cáo trước khi build."
 
 BUILD_SYNTAX = (
     "<b>Cú pháp:</b>\n"
@@ -430,19 +432,58 @@ def _build_help_text() -> str:
 HELP_TEXT = _build_help_text()
 
 
-def debug_info(redis_ok: bool, topic_id, build_topic_id, thread_id,
-               today: str, report_count: int, reporters: list, auth_count: int) -> str:
+def _format_schedule() -> str:
+    """Build schedule text từ SCHEDULE_JOBS, nhóm theo ngày, sắp theo giờ VN."""
+    DAY_LABELS = {"mon-fri": "T2-T6", "sat": "T7"}
+    grouped: dict[str, list] = {}
+    for label, hour_utc, minute, day_of_week in SCHEDULE_JOBS:
+        vn_hour = (hour_utc + UTC_OFFSET_VN) % 24
+        key = DAY_LABELS.get(day_of_week, day_of_week)
+        grouped.setdefault(key, []).append((vn_hour, minute, label))
+
+    lines = []
+    for day_label in DAY_LABELS.values():
+        items = grouped.get(day_label)
+        if not items:
+            continue
+        lines.append(f"  {day_label}:")
+        for vn_hour, minute, label in sorted(items):
+            lines.append(f"    {vn_hour:02d}:{minute:02d} - {label}")
+    return "\n".join(lines)
+
+
+def debug_info(redis_ok: bool, topic_id, build_topic_id, log_topic_id, thread_id,
+               today: str, report_count: int, reporters: list,
+               auth_count: int, members_count: int, uptime_str: str) -> str:
+    redis_icon = EMOJI_CHECK if redis_ok else EMOJI_CROSS
     lines = [
-        "<b>Thông tin hệ thống</b>",
-        f"Redis: {'đã kết nối' if redis_ok else 'chưa kết nối'}",
-        f"TOPIC_ID: <code>{topic_id}</code>",
-        f"BUILD_TOPIC_ID: <code>{build_topic_id}</code>",
-        f"thread_id: <code>{thread_id}</code>",
-        f"Báo cáo ngày {today}: <b>{report_count}</b> người",
+        f"{EMOJI_HAMMER} <b>Debug - Thông tin hệ thống</b>",
+        "",
+        "<b>Kết nối:</b>",
+        f"  {redis_icon} Redis: {'OK' if redis_ok else 'DOWN'}",
+        "",
+        "<b>Topics:</b>",
+        f"  Report: <code>{topic_id}</code>",
+        f"  Build: <code>{build_topic_id}</code>",
+        f"  Log: <code>{log_topic_id}</code>",
+        f"  Hiện tại: <code>{thread_id}</code>",
+        "",
+        f"<b>Báo cáo ngày {today}:</b>",
+        f"  Đã nộp: <b>{report_count}</b> người",
     ]
     if reporters:
-        lines.append("Đã nộp: " + ", ".join(reporters))
-    lines.append(f"Quyền build: <b>{auth_count}</b> người")
+        lines.append(f"  {', '.join(reporters)}")
+    lines += [
+        "",
+        "<b>Quyền:</b>",
+        f"  Members: <b>{members_count}</b>",
+        f"  Build auth: <b>{auth_count}</b>",
+        "",
+        "<b>Schedule (giờ VN):</b>",
+        _format_schedule(),
+        "",
+        f"\u23f1 Uptime: <b>{uptime_str}</b>",
+    ]
     return "\n".join(lines)
 
 

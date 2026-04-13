@@ -89,6 +89,21 @@ BUILD_STEPS = [
 ]
 
 
+# ============ SCHEDULE (UTC) ============
+# Format: (label, hour_utc, minute, day_of_week)
+# VN = UTC+7, nên 09:00 UTC = 16:00 VN
+
+SCHEDULE_JOBS = [
+    ("Nhắc nộp báo cáo ngày",  9, 0, "mon-fri"),   # 16:00 VN T2-T6
+    ("Nhắc nộp báo cáo ngày",  2, 0, "sat"),        # 09:00 VN T7
+    ("Nhắc nộp báo cáo tuần",  3, 0, "sat"),        # 10:00 VN T7
+    ("Nhắc chưa nộp báo cáo", 10, 0, "mon-fri"),    # 17:00 VN T2-T6
+    ("Nhắc chưa nộp báo cáo",  4, 0, "sat"),        # 11:00 VN T7
+]
+
+UTC_OFFSET_VN = 7  # Dùng để tính giờ VN hiển thị
+
+
 # ============ REPORT PARSER SECTIONS ============
 
 REPORT_SECTIONS = ("done", "doing", "issue", "support", "plan")
