@@ -53,9 +53,9 @@ REDIS_TIMEOUT = 5
 # ============ BUILD LIMITS & TIMINGS ============
 
 MAX_QUEUE_SIZE = 10
-MAX_CONCURRENT_BUILDS = 5    # Build song song (khác project)
+MAX_CONCURRENT_BUILDS = 1    # Build song song (khác project)
 MAX_RECENT_BUILDS = 20       # Số builds lưu trong list history
-BUILD_TIMEOUT = 1800         # 30 phút (giây)
+BUILD_TIMEOUT = 3600         # 30 phút (giây)
 BUILD_TIMEOUT_MINUTES = BUILD_TIMEOUT // 60
 EDIT_THROTTLE_SECONDS = 2    # Tối thiểu giữa 2 lần edit cùng 1 message
 LOG_TAIL_LINES = 40          # Số dòng cuối file log khi /log
