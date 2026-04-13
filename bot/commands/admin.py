@@ -9,6 +9,8 @@ from bot.constants import DATE_FORMAT_KEY
 from bot.core.store import (
     db, get_today_reports, get_build_authorized,
     add_build_authorized, remove_build_authorized, get_members,
+    has_topic_acl, get_topic_acl, add_topic_acl, remove_topic_acl,
+    enable_topic_acl, disable_topic_acl,
 )
 from bot.core.telegram import send_html
 from bot import messages
@@ -120,3 +122,73 @@ def handle_health(chat_id, thread_id, build_queue):
         pending_count=len(status["pending"]),
         uptime_str=_uptime_str(),
     ), thread_id)
+
+
+# ============ TOPIC ACL ============
+
+def _require_log_topic(handler):
+    """Decorator: chỉ cho phép gọi trong LOG_TOPIC_ID."""
+    @wraps(handler)
+    def wrapper(chat_id, thread_id, user_id, *args, **kwargs):
+        if not thread_id or str(thread_id) != str(LOG_TOPIC_ID):
+            send_html(chat_id, messages.TOPIC_ACL_NOT_IN_LOG, thread_id)
+            return
+        return handler(chat_id, thread_id, user_id, *args, **kwargs)
+    return wrapper
+
+
+@_require_admin
+@_require_log_topic
+def handle_topic_auth(chat_id, thread_id, user_id, text):
+    parts = text.strip().split()
+    if len(parts) < 3:
+        send_html(chat_id, messages.TOPIC_AUTH_SYNTAX, thread_id)
+        return
+
+    topic_id = parts[1]
+    target_id = parts[2]
+    add_topic_acl(topic_id, target_id)
+    send_html(chat_id, messages.topic_auth_success(topic_id, target_id), thread_id)
+
+
+@_require_admin
+@_require_log_topic
+def handle_topic_unauth(chat_id, thread_id, user_id, text):
+    parts = text.strip().split()
+    if len(parts) < 3:
+        send_html(chat_id, messages.TOPIC_UNAUTH_SYNTAX, thread_id)
+        return
+
+    topic_id = parts[1]
+    target_id = parts[2]
+    remove_topic_acl(topic_id, target_id)
+    send_html(chat_id, messages.topic_unauth_success(topic_id, target_id), thread_id)
+
+
+@_require_admin
+@_require_log_topic
+def handle_topic_acl(chat_id, thread_id, user_id, text):
+    parts = text.strip().split()
+    if len(parts) < 2:
+        send_html(chat_id, messages.TOPIC_ACL_SYNTAX, thread_id)
+        return
+
+    topic_id = parts[1]
+    sub = parts[2].lower() if len(parts) >= 3 else None
+
+    # /topic_acl <topic_id> list → xem danh sách
+    if sub == "list":
+        if not has_topic_acl(topic_id):
+            send_html(chat_id, messages.topic_acl_no_restriction(topic_id), thread_id)
+            return
+        acl = get_topic_acl(topic_id)
+        send_html(chat_id, messages.topic_acl_list(topic_id, acl), thread_id)
+        return
+
+    # /topic_acl <topic_id> → toggle bật/tắt
+    if has_topic_acl(topic_id):
+        disable_topic_acl(topic_id)
+        send_html(chat_id, messages.topic_acl_disabled(topic_id), thread_id)
+    else:
+        enable_topic_acl(topic_id)
+        send_html(chat_id, messages.topic_acl_enabled(topic_id), thread_id)

@@ -10,7 +10,7 @@ import redis
 from bot.config import KV_REDIS_URL, VN_TZ
 from bot.constants import (
     KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_AUTH, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
-    KEY_BUILD_ACTIVE,
+    KEY_BUILD_ACTIVE, KEY_TOPIC_ACL_PREFIX,
     TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
     DATE_FORMAT_KEY,
 )
@@ -145,3 +145,48 @@ def get_all_active_builds() -> dict:
 def clear_active_builds() -> None:
     """Xoá toàn bộ active builds. Dùng sau khi cleanup startup."""
     db.delete(KEY_BUILD_ACTIVE)
+
+
+# ============ TOPIC ACL (Set per topic) ============
+
+def _topic_acl_key(thread_id) -> str:
+    return f"{KEY_TOPIC_ACL_PREFIX}:{thread_id}"
+
+
+@_with_redis(False)
+def has_topic_acl(thread_id) -> bool:
+    """Kiểm tra topic có thiết lập ACL không. True = có whitelist."""
+    return db.exists(_topic_acl_key(thread_id)) == 1
+
+
+@_with_redis(set())
+def get_topic_acl(thread_id) -> set:
+    """Trả về set user_id được phép nhắn trong topic (không bao gồm marker)."""
+    members = db.smembers(_topic_acl_key(thread_id))
+    if not members:
+        return set()
+    return {m.decode() for m in members if m.decode() != "__acl_enabled__"}
+
+
+@_with_redis(None)
+def add_topic_acl(thread_id, user_id: str) -> None:
+    """Thêm user vào whitelist topic."""
+    db.sadd(_topic_acl_key(thread_id), user_id)
+
+
+@_with_redis(None)
+def remove_topic_acl(thread_id, user_id: str) -> None:
+    """Xoá user khỏi whitelist topic."""
+    db.srem(_topic_acl_key(thread_id), user_id)
+
+
+@_with_redis(None)
+def enable_topic_acl(thread_id) -> None:
+    """Bật ACL cho topic. Dùng marker __acl_enabled__ để đảm bảo key tồn tại."""
+    db.sadd(_topic_acl_key(thread_id), "__acl_enabled__")
+
+
+@_with_redis(None)
+def disable_topic_acl(thread_id) -> None:
+    """Tắt ACL cho topic (xóa key → topic mở cho tất cả)."""
+    db.delete(_topic_acl_key(thread_id))

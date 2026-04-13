@@ -146,10 +146,11 @@ BUILD_NO_AUTH = "Bạn chưa được cấp quyền build. Liên hệ admin dùn
 def build_no_report_projects(projects: list[str]) -> str:
     """projects: danh sách slug chưa có báo cáo ngày tương ứng."""
     names = ", ".join(escape(p) for p in projects)
+    examples = ", ".join(f"<code>[X] {escape(p)}</code>" for p in projects)
     return (
         "Chưa có báo cáo ngày cho dự án: "
         f"<b>{names}</b>. Cần có ít nhất một báo cáo hôm nay có khối "
-        "<code>[X] Tên dự án</code> khớp với dự án build (bất kỳ thành viên)."
+        f"{examples} khớp với dự án build (bất kỳ thành viên)."
     )
 
 
@@ -413,6 +414,51 @@ def build_auth_success(user_id: str) -> str:
 
 def build_unauth_success(user_id: str) -> str:
     return f"User <code>{user_id}</code> đã bị xoá quyền build."
+
+
+# ============ TOPIC ACL ============
+
+TOPIC_ACL_NOT_IN_LOG = "Lệnh này chỉ dùng được trong Log topic."
+
+TOPIC_AUTH_SYNTAX = "<b>Cú pháp:</b> <code>/topic_auth &lt;topic_id&gt; &lt;user_id&gt;</code>"
+TOPIC_UNAUTH_SYNTAX = "<b>Cú pháp:</b> <code>/topic_unauth &lt;topic_id&gt; &lt;user_id&gt;</code>"
+TOPIC_ACL_SYNTAX = (
+    "<b>Cú pháp:</b>\n"
+    "<code>/topic_acl &lt;topic_id&gt;</code> - Bật/tắt ACL cho topic\n"
+    "<code>/topic_acl &lt;topic_id&gt; list</code> - Xem danh sách phân quyền"
+)
+
+
+def topic_auth_success(topic_id: str, user_id: str) -> str:
+    return f"User <code>{user_id}</code> đã được cấp quyền nhắn tin trong topic <code>{topic_id}</code>."
+
+
+def topic_unauth_success(topic_id: str, user_id: str) -> str:
+    return f"User <code>{user_id}</code> đã bị xoá quyền nhắn tin trong topic <code>{topic_id}</code>."
+
+
+def topic_acl_enabled(topic_id: str) -> str:
+    return f"Topic <code>{topic_id}</code> đã <b>bật</b> ACL (chỉ admin + whitelist được nhắn)."
+
+
+def topic_acl_disabled(topic_id: str) -> str:
+    return f"Topic <code>{topic_id}</code> đã <b>tắt</b> ACL (mở cho tất cả)."
+
+
+def topic_acl_list(topic_id: str, user_ids: set) -> str:
+    if not user_ids:
+        return f"Topic <code>{topic_id}</code> đang bật ACL nhưng chưa có ai trong whitelist (chỉ admin được nhắn)."
+    lines = [f"<b>Phân quyền topic <code>{topic_id}</code>:</b>", ""]
+    for uid in sorted(user_ids):
+        lines.append(f"  • <code>{uid}</code>")
+    return "\n".join(lines)
+
+
+def topic_acl_no_restriction(topic_id: str) -> str:
+    return f"Topic <code>{topic_id}</code> chưa bật ACL (mở cho tất cả)."
+
+
+TOPIC_ACL_DENIED = "Bạn không có quyền nhắn tin trong topic này."
 
 
 # ============ HELP / DEBUG ============

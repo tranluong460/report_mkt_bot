@@ -41,12 +41,14 @@ KEY_BUILD_AUTH = "build:authorized"      # Set: user_id có quyền build
 KEY_BUILD_COUNTER = "build:counter"      # Int: auto-increment build_id
 KEY_BUILDS_RECENT = "builds:recent"      # List: JSON của N builds gần nhất
 KEY_BUILD_ACTIVE = "build:active"        # Hash: build_id → info để cleanup khi restart
+KEY_TOPIC_ACL_PREFIX = "topic:acl"       # Set: topic:acl:{thread_id} → user_ids được phép
 
 
 # ============ TTL (giây) ============
 
 TTL_REPORT = 172800          # 2 ngày
 TTL_BUILDS_RECENT = 604800   # 7 ngày
+TTL_TOPIC_ACL_WARNING = 3    # Giây trước khi xóa cảnh báo ACL
 REDIS_TIMEOUT = 5
 
 
@@ -156,4 +158,10 @@ BOT_COMMANDS = [
      "<code>&lt;user_id&gt;</code> Cấp quyền build cho user", "Admin"),
     ("build_unauth", "Xoá quyền build (admin)",
      "<code>&lt;user_id&gt;</code> Xoá quyền build", "Admin"),
+    ("topic_auth", "Cấp quyền nhắn tin topic (admin)",
+     "<code>&lt;topic_id&gt; &lt;user_id&gt;</code> Cấp quyền nhắn tin vào topic", "Admin"),
+    ("topic_unauth", "Xoá quyền nhắn tin topic (admin)",
+     "<code>&lt;topic_id&gt; &lt;user_id&gt;</code> Xoá quyền nhắn tin khỏi topic", "Admin"),
+    ("topic_acl", "Bật/tắt ACL topic (admin)",
+     "<code>&lt;topic_id&gt;</code> Bật/tắt ACL | <code>&lt;topic_id&gt; list</code> Xem phân quyền", "Admin"),
 ]

@@ -2,14 +2,18 @@
 
 import logging
 import time
+from threading import Timer
 
-from bot.config import GROUP_CHAT_ID
-from bot.core.telegram import get_updates, answer_callback_query, delete_message
+from bot.config import GROUP_CHAT_ID, ADMIN_USER_ID
+from bot.constants import TTL_TOPIC_ACL_WARNING
+from bot.core.store import has_topic_acl, get_topic_acl
+from bot.core.telegram import get_updates, answer_callback_query, delete_message, send_html
 from bot.commands.report import handle_report
 from bot.commands.member import handle_follow, handle_unfollow, handle_all
 from bot.commands.admin import (
     handle_debug, handle_build_auth, handle_build_unauth,
     handle_help, handle_health,
+    handle_topic_auth, handle_topic_unauth, handle_topic_acl,
 )
 from bot.commands.build import (
     handle_build, handle_cancel, handle_queue, handle_status,
@@ -48,6 +52,33 @@ def _extract_message(update: dict) -> dict | None:
     }
 
 
+def _check_topic_acl(chat_id: int, thread_id, message_id: int, user_id: str) -> bool:
+    """Kiểm tra user có quyền nhắn tin trong topic không.
+    Trả về True nếu được phép, False nếu bị chặn (đã xóa tin + gửi cảnh báo).
+    """
+    if not thread_id:
+        return True
+    # Admin luôn bypass
+    if ADMIN_USER_ID and user_id == str(ADMIN_USER_ID):
+        return True
+    # Topic chưa thiết lập ACL → mở cho tất cả
+    if not has_topic_acl(thread_id):
+        return True
+    # Kiểm tra user trong whitelist
+    acl = get_topic_acl(thread_id)
+    if user_id in acl:
+        return True
+
+    # Chặn: xóa tin nhắn + gửi cảnh báo tự hủy sau 3s
+    from bot import messages
+    delete_message(chat_id, message_id)
+    result = send_html(chat_id, messages.TOPIC_ACL_DENIED, thread_id)
+    warning_id = result.get("result", {}).get("message_id") if result.get("ok") else None
+    if warning_id:
+        Timer(TTL_TOPIC_ACL_WARNING, delete_message, [chat_id, warning_id]).start()
+    return False
+
+
 def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
     """Dispatch command. Trả về True nếu có handler."""
     chat_id = ctx["chat_id"]
@@ -76,6 +107,9 @@ def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
         "/export":        lambda: handle_export(chat_id, thread_id),
         "/build_auth":    lambda: handle_build_auth(chat_id, thread_id, user_id, text),
         "/build_unauth":  lambda: handle_build_unauth(chat_id, thread_id, user_id, text),
+        "/topic_auth":    lambda: handle_topic_auth(chat_id, thread_id, user_id, text),
+        "/topic_unauth":  lambda: handle_topic_unauth(chat_id, thread_id, user_id, text),
+        "/topic_acl":     lambda: handle_topic_acl(chat_id, thread_id, user_id, text),
     }
 
     handler = handlers.get(cmd)
@@ -141,6 +175,10 @@ def handle_update(update: dict, build_queue: BuildQueue) -> None:
 
     ctx = _extract_message(update)
     if not ctx:
+        return
+
+    # Topic ACL check - chặn trước khi xử lý bất kỳ thứ gì
+    if not _check_topic_acl(ctx["chat_id"], ctx["thread_id"], ctx["message_id"], ctx["user_id"]):
         return
 
     # Report topic → handle riêng
