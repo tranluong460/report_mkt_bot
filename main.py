@@ -80,17 +80,17 @@ def setup_scheduler() -> BackgroundScheduler:
     from bot.runtime.scheduled import send_missing_report_alert
     scheduler = BackgroundScheduler(timezone="UTC")
     # Nhắc ngày: 16:00 VN T2-T6 (09:00 UTC)
-    scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=0, day_of_week="mon-fri")
+    scheduler.add_job(send_daily_reminder, "cron", hour=9, minute=0, day_of_week="mon-fri", misfire_grace_time=300)
     # Nhắc ngày: 10:00 VN T7 (03:00 UTC)
-    scheduler.add_job(send_daily_reminder, "cron", hour=3, minute=0, day_of_week="sat")
+    scheduler.add_job(send_daily_reminder, "cron", hour=3, minute=0, day_of_week="sat", misfire_grace_time=300)
     # Nhắc tuần: 09:00 VN T7 (02:00 UTC)
-    scheduler.add_job(send_weekly_reminder, "cron", hour=2, minute=0, day_of_week="sat")
+    scheduler.add_job(send_weekly_reminder, "cron", hour=2, minute=0, day_of_week="sat", misfire_grace_time=300)
     # Missing report alert: 21:00 VN T2-T6 (14:00 UTC)
-    scheduler.add_job(send_missing_report_alert, "cron", hour=14, minute=0, day_of_week="mon-fri")
+    scheduler.add_job(send_missing_report_alert, "cron", hour=14, minute=0, day_of_week="mon-fri", misfire_grace_time=300)
     # Missing report alert: 11:00 VN T7 (04:00 UTC)
-    scheduler.add_job(send_missing_report_alert, "cron", hour=4, minute=0, day_of_week="sat")
+    scheduler.add_job(send_missing_report_alert, "cron", hour=4, minute=0, day_of_week="sat", misfire_grace_time=300)
     # Tổng hợp: 23:00 VN T2-T7 (16:00 UTC)
-    scheduler.add_job(send_daily_summary, "cron", hour=16, minute=0, day_of_week="mon-sat")
+    scheduler.add_job(send_daily_summary, "cron", hour=16, minute=0, day_of_week="mon-sat", misfire_grace_time=300)
     return scheduler
 
 
