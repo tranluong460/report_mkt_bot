@@ -214,6 +214,11 @@ def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, buil
     # Xoá message /retry của user ngay
     delete_message(chat_id, message_id)
 
+    # Xoá tin nhắn build lỗi cũ
+    old_msg_id = target.get("message_id")
+    if old_msg_id:
+        delete_message(chat_id, old_msg_id)
+
     # Enqueue như build bình thường
     _enqueue_build(chat_id, thread_id, None, user_id, first_name,
                    project, branch, build_queue)

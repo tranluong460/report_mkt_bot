@@ -176,6 +176,7 @@ class BuildWorker:
             "duration": duration_str,
             "error": result["error"],
             "finished_at": datetime.now(VN_TZ).strftime(DATE_FORMAT_COMPACT),
+            "message_id": job.message_id,
         })
 
     def _finalize_step_status(self, step_status: list, result: dict):
