@@ -162,15 +162,9 @@ def build_project_not_found(project: str) -> str:
 def build_success_caption(project: str, done_items: list,
                           duration_seconds: float = 0,
                           recent_builds: list | None = None) -> str:
-    """Caption khi build thành công - liệt kê done items của project.
-
-    Emoji theo duration (⚡ fast / ✅ normal / 🐌 slow) +
-    badge 🔥 nếu project build nhiều lần gần đây.
-    """
+    """Caption khi build thành công - liệt kê done items của project."""
     today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
-    icon = duration_emoji(duration_seconds)
-    badge = popularity_badge(project, recent_builds or [])
-    lines = [f"{icon} <b>{escape(project)} - {today}</b>{badge}"]
+    lines = [f"<b>{escape(project)} - {today}</b>"]
     if done_items:
         for i, item in enumerate(done_items, 1):
             lines.append(f"{i}. {escape(item)}")
