@@ -105,28 +105,42 @@ def parse_report(text: str) -> dict:
     return result
 
 
-def get_project_done_items(reports: dict, project_name: str) -> list:
-    """Lấy done items của 1 project từ tất cả reports hôm nay.
+def project_report_names_match(build_project: str, report_project_name: str) -> bool:
+    """Khớp tên dự án build với khối [X] trong báo cáo (cùng quy tắc với get_project_done_items).
 
-    Match rules (theo thứ tự ưu tiên):
-    1. Exact match (ignore case)
-    2. Project trong report bắt đầu bằng build project (vd: build "mkt-care" match report "mkt-care-2025")
-    3. Build project bắt đầu bằng report project (vd: build "mkt-care-2025" match report "mkt-care")
+    1. Trùng hoàn toàn (không phân biệt hoa thường)
+    2. Tên trong report bắt đầu bằng slug build (vd: build "mkt-care" ↔ report "mkt-care-2025")
+    3. Slug build bắt đầu bằng tên trong report
     """
-    target = project_name.lower().strip()
+    target = build_project.lower().strip()
+    name = report_project_name.lower().strip()
+    if not name or not target:
+        return False
+    return name == target or name.startswith(target) or target.startswith(name)
+
+
+def get_project_done_items(reports: dict, project_name: str) -> list:
+    """Lấy done items của 1 project từ tất cả reports hôm nay."""
     items = []
     seen = set()
     for report in reports.values():
         for proj in report.get("projects", []):
-            name = proj.get("name", "").lower().strip()
-            if not name:
+            if not project_report_names_match(project_name, proj.get("name", "")):
                 continue
-            if name == target or name.startswith(target) or target.startswith(name):
-                for done in proj.get("done", []):
-                    if done and done not in seen:
-                        seen.add(done)
-                        items.append(done)
+            for done in proj.get("done", []):
+                if done and done not in seen:
+                    seen.add(done)
+                    items.append(done)
     return items
+
+
+def has_today_report_for_project(reports: dict, project_name: str) -> bool:
+    """True nếu hôm nay có ít nhất một báo cáo chứa khối dự án khớp với project_name (bất kỳ user)."""
+    for report in reports.values():
+        for proj in report.get("projects", []):
+            if project_report_names_match(project_name, proj.get("name", "")):
+                return True
+    return False
 
 
 def build_summary_message(reports: dict) -> str:

@@ -8,6 +8,7 @@ from bot.core.store import (
     get_build_authorized, next_build_id, get_recent_builds,
     register_active_build, get_today_reports,
 )
+from bot.core.parser import has_today_report_for_project
 from bot.core.telegram import send_html, send_document, edit_message_media, delete_message
 from bot import messages
 from bot.builder.queue import BuildJob
@@ -21,12 +22,12 @@ def handle_build(chat_id, thread_id, message_id, text, user_id, first_name, buil
         return
     if not _check_build_auth(chat_id, thread_id, user_id):
         return
-    if not _check_daily_report(chat_id, thread_id, user_id):
-        return
 
     # Parse args: trả về list tuple (project, branch)
     jobs_spec = _parse_build_args(chat_id, thread_id, text)
     if not jobs_spec:
+        return
+    if not _check_daily_report_for_projects(chat_id, thread_id, jobs_spec):
         return
 
     # Multi-build: xoá command message ngay sau khi parse OK (không cần chờ)
@@ -109,10 +110,19 @@ def _check_build_auth(chat_id, thread_id, user_id) -> bool:
     return True
 
 
-def _check_daily_report(chat_id, thread_id, user_id) -> bool:
+def _check_daily_report_for_projects(chat_id, thread_id, jobs_spec: list[tuple[str, str]]) -> bool:
+    """Yêu cầu báo cáo ngày có khối dự án khớp từng project build (theo slug), không phụ thuộc user gọi lệnh."""
     reports = get_today_reports()
-    if user_id not in reports:
-        send_html(chat_id, messages.BUILD_NO_REPORT, thread_id)
+    seen: set[str] = set()
+    missing: list[str] = []
+    for project, _branch in jobs_spec:
+        if project in seen:
+            continue
+        seen.add(project)
+        if not has_today_report_for_project(reports, project):
+            missing.append(project)
+    if missing:
+        send_html(chat_id, messages.build_no_report_projects(missing), thread_id)
         return False
     return True
 
@@ -196,8 +206,6 @@ def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, buil
         return
     if not _check_build_auth(chat_id, thread_id, user_id):
         return
-    if not _check_daily_report(chat_id, thread_id, user_id):
-        return
 
     parts = text.strip().split()
     if len(parts) < 2:
@@ -222,6 +230,8 @@ def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, buil
 
     project = target.get("project")
     branch = target.get("branch", "main")
+    if not _check_daily_report_for_projects(chat_id, thread_id, [(project, branch)]):
+        return
 
     # Xoá message /retry của user ngay
     delete_message(chat_id, message_id)
@@ -241,10 +251,6 @@ def handle_retry_callback(chat_id, msg_id, build_id, user_id, first_name, build_
     if not _is_build_authorized(user_id):
         return False, "Bạn chưa được cấp quyền build"
 
-    reports = get_today_reports()
-    if str(user_id) not in reports:
-        return False, "Bạn chưa nộp báo cáo hôm nay, không thể build"
-
     history = get_recent_builds(MAX_RECENT_BUILDS)
     target = next((b for b in history if b.get("id") == build_id), None)
     if not target:
@@ -254,6 +260,12 @@ def handle_retry_callback(chat_id, msg_id, build_id, user_id, first_name, build_
 
     project = target.get("project")
     branch = target.get("branch", "main")
+    reports = get_today_reports()
+    if not has_today_report_for_project(reports, project):
+        return False, (
+            f"Chưa có báo cáo ngày cho dự án {project}, không thể build. "
+            "Cần có báo cáo hôm nay có khối dự án tương ứng."
+        )
     thread_id = BUILD_TOPIC_ID and int(BUILD_TOPIC_ID)
 
     # Xoá tin nhắn build lỗi cũ

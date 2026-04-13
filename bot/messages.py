@@ -141,7 +141,17 @@ def build_duplicate(project: str) -> str:
 BUILD_REDIS_ERROR = "Lỗi Redis, không tạo được build ID."
 BUILD_NOT_IN_TOPIC = "Lệnh /build chỉ dùng được trong Build topic."
 BUILD_NO_AUTH = "Bạn chưa được cấp quyền build. Liên hệ admin dùng /build_auth."
-BUILD_NO_REPORT = "Bạn chưa nộp báo cáo hôm nay. Vui lòng nộp báo cáo trước khi build."
+
+
+def build_no_report_projects(projects: list[str]) -> str:
+    """projects: danh sách slug chưa có báo cáo ngày tương ứng."""
+    names = ", ".join(escape(p) for p in projects)
+    return (
+        "Chưa có báo cáo ngày cho dự án: "
+        f"<b>{names}</b>. Cần có ít nhất một báo cáo hôm nay có khối "
+        "<code>[X] Tên dự án</code> khớp với dự án build (bất kỳ thành viên)."
+    )
+
 
 BUILD_SYNTAX = (
     "<b>Cú pháp:</b>\n"

@@ -12,7 +12,13 @@ for k in ['BOT_TOKEN', 'GROUP_CHAT_ID', 'TOPIC_ID', 'WEEKLY_TOPIC_ID',
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from bot.core.parser import parse_report, get_project_done_items, build_summary_message
+from bot.core.parser import (
+    parse_report,
+    get_project_done_items,
+    build_summary_message,
+    has_today_report_for_project,
+    project_report_names_match,
+)
 
 
 class TestParseReport(unittest.TestCase):
@@ -179,6 +185,19 @@ class TestGetProjectDoneItems(unittest.TestCase):
         reports = self._reports(("", ["task A"]))
         items = get_project_done_items(reports, "mkt-care")
         self.assertEqual(items, [])
+
+    def test_has_today_report_for_project_true(self):
+        reports = self._reports(("mkt-care", ["a"]))
+        self.assertTrue(has_today_report_for_project(reports, "mkt-care"))
+        self.assertTrue(has_today_report_for_project(reports, "mkt-care-2025"))
+
+    def test_has_today_report_for_project_false(self):
+        reports = self._reports(("other", ["a"]))
+        self.assertFalse(has_today_report_for_project(reports, "mkt-care"))
+
+    def test_project_report_names_match_symmetry_cases(self):
+        self.assertTrue(project_report_names_match("mkt-care", "mkt-care-2025"))
+        self.assertTrue(project_report_names_match("mkt-care-2025", "mkt-care"))
 
 
 class TestBuildSummaryMessage(unittest.TestCase):
