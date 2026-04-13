@@ -48,11 +48,17 @@ def edit_message(chat_id: int, message_id: int, text: str, parse_mode: str = "Ma
         return {"ok": False}
 
 
-def edit_message_caption(chat_id: int, message_id: int, caption: str, parse_mode: str = "HTML") -> dict:
+def edit_message_caption(
+    chat_id: int, message_id: int, caption: str,
+    parse_mode: str = "HTML", reply_markup: dict | None = None,
+) -> dict:
     try:
+        payload = {"chat_id": chat_id, "message_id": message_id, "caption": caption, "parse_mode": parse_mode}
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
         response = _client.post(
             f"{TELEGRAM_API}/editMessageCaption",
-            json={"chat_id": chat_id, "message_id": message_id, "caption": caption, "parse_mode": parse_mode},
+            json=payload,
         )
         return response.json()
     except httpx.HTTPError as e:
@@ -189,6 +195,7 @@ def edit_message_media(
     file_path: str,
     caption: str = "",
     parse_mode: str = "HTML",
+    reply_markup: dict | None = None,
 ) -> dict:
     """Thay file + caption của document message."""
     try:
@@ -203,6 +210,8 @@ def edit_message_media(
             "message_id": str(message_id),
             "media": media,
         }
+        if reply_markup is not None:
+            data["reply_markup"] = json.dumps(reply_markup)
         with open(file_path, "rb") as f:
             response = _client.post(
                 f"{TELEGRAM_API}/editMessageMedia",

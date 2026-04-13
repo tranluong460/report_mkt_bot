@@ -224,6 +224,35 @@ def handle_retry(chat_id, thread_id, message_id, text, user_id, first_name, buil
                    project, branch, build_queue)
 
 
+def handle_retry_callback(chat_id, msg_id, build_id, user_id, first_name, build_queue):
+    """Retry qua inline button. Trả về (success, message)."""
+    if not _is_build_authorized(user_id):
+        return False, "Bạn chưa được cấp quyền build"
+
+    history = get_recent_builds(MAX_RECENT_BUILDS)
+    target = next((b for b in history if b.get("id") == build_id), None)
+    if not target:
+        return False, f"Không tìm thấy Build #{build_id}"
+    if target.get("success"):
+        return False, f"Build #{build_id} không phải build lỗi"
+
+    project = target.get("project")
+    branch = target.get("branch", "main")
+    thread_id = BUILD_TOPIC_ID and int(BUILD_TOPIC_ID)
+
+    # Xoá tin nhắn build lỗi cũ
+    delete_message(chat_id, msg_id)
+
+    _enqueue_build(chat_id, thread_id, None, user_id, first_name,
+                   project, branch, build_queue)
+    return True, f"Đang retry Build #{build_id}"
+
+
+def _is_build_authorized(user_id) -> bool:
+    authorized = get_build_authorized()
+    return user_id in authorized or str(ADMIN_USER_ID) == str(user_id)
+
+
 # ============ /cancel ============
 
 def handle_cancel(chat_id, thread_id, text, user_id, build_queue):

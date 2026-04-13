@@ -256,10 +256,16 @@ class BuildWorker:
             result["error"] or "Lỗi không xác định",
         )
 
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "\U0001f504 Build lại", "callback_data": f"retry:{job.build_id}"}
+            ]]
+        }
+
         if build_msg_id and result["log_path"]:
-            edit_message_media(chat_id, build_msg_id, result["log_path"], caption)
+            edit_message_media(chat_id, build_msg_id, result["log_path"], caption, reply_markup=reply_markup)
         elif build_msg_id:
-            edit_message_caption(chat_id, build_msg_id, caption)
+            edit_message_caption(chat_id, build_msg_id, caption, reply_markup=reply_markup)
         else:
             send_telegram_message(chat_id, caption, build_thread_id, parse_mode="HTML")
 

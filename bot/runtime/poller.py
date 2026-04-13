@@ -14,6 +14,7 @@ from bot.commands.admin import (
 from bot.commands.build import (
     handle_build, handle_cancel, handle_queue, handle_status,
     handle_log, handle_build_history, handle_retry, handle_stats,
+    handle_retry_callback,
 )
 from bot.commands.export import handle_export
 from bot.builder.queue import BuildQueue
@@ -109,6 +110,24 @@ def _handle_callback_query(update: dict, build_queue: BuildQueue) -> None:
             answer_callback_query(cb_id, f"Đã huỷ Build #{build_id}")
         else:
             answer_callback_query(cb_id, "Không huỷ được (có thể đang chạy)")
+        return
+
+    # callback_data format: "retry:<build_id>"
+    if data.startswith("retry:"):
+        try:
+            build_id = int(data.split(":", 1)[1])
+        except (ValueError, IndexError):
+            answer_callback_query(cb_id, "Dữ liệu không hợp lệ")
+            return
+
+        from_user = cb.get("from", {})
+        user_id = from_user.get("id")
+        first_name = from_user.get("first_name", "Unknown")
+
+        success, msg = handle_retry_callback(
+            chat_id, msg_id, build_id, user_id, first_name, build_queue,
+        )
+        answer_callback_query(cb_id, msg)
         return
 
     answer_callback_query(cb_id)
