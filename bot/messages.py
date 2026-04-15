@@ -67,31 +67,6 @@ def weekly_reminder() -> str:
 
 # ============ REPORT ============
 
-REPORT_FORMAT_HELP = (
-    "Sai format. Cần có: `date:`, `name:`, và ít nhất 1 project `[A] Tên dự án`"
-)
-
-NO_REPORTS_TODAY = "Chưa có báo cáo nào hôm nay."
-NO_DONE_TODAY = "Chưa có task done nào hôm nay."
-
-
-def missing_report_alert(missing_members: dict) -> str:
-    """Tạo message tag các user chưa nộp báo cáo.
-
-    missing_members: dict {user_id: {first_name, username}}
-    """
-    mentions = []
-    for uid, info in missing_members.items():
-        name = escape(info.get("first_name", "") or "User")
-        mentions.append(f'<a href="tg://user?id={uid}">{name}</a>')
-
-    return (
-        f"{EMOJI_WARNING} <b>Nhắc báo cáo hôm nay</b>\n\n"
-        f"Những bạn sau chưa nộp báo cáo:\n"
-        + "  " + " ".join(mentions)
-    )
-
-
 # ============ MEMBER ============
 
 def follow_success(first_name: str) -> str:
@@ -143,13 +118,20 @@ BUILD_NOT_IN_TOPIC = "Lệnh /build chỉ dùng được trong Build topic."
 
 
 def build_no_report_projects(projects: list[str]) -> str:
-    """projects: danh sách slug chưa có báo cáo ngày tương ứng."""
-    names = ", ".join(escape(p) for p in projects)
-    examples = ", ".join(f"<code>[X] {escape(p)}</code>" for p in projects)
+    """projects: danh sách folder chưa có task hôm nay."""
+    names = ", ".join(f"<code>{escape(p)}</code>" for p in projects)
     return (
-        "Chưa có báo cáo ngày cho dự án: "
-        f"<b>{names}</b>. Cần có ít nhất một báo cáo hôm nay có khối "
-        f"{examples} khớp với dự án build (bất kỳ thành viên)."
+        f"Chưa có task hôm nay cho dự án: {names}. "
+        "Cần có ít nhất 1 task được cập nhật hôm nay (theo PREFIX đã map)."
+    )
+
+
+def build_no_prefix_mapped(folders: list[str]) -> str:
+    """folders chưa map sang PREFIX → không build được."""
+    names = ", ".join(f"<code>{escape(f)}</code>" for f in folders)
+    return (
+        f"Chưa map PREFIX cho folder: {names}. "
+        "Admin dùng <code>/map_set &lt;PREFIX&gt; &lt;folder&gt;</code> để cấu hình."
     )
 
 
@@ -171,18 +153,20 @@ def build_project_not_found(project: str) -> str:
 
 # ============ BUILD - Result ============
 
-def build_success_caption(project: str, done_items: list,
+def build_success_caption(project: str, tasks: list,
                           duration_seconds: float = 0,
                           recent_builds: list | None = None) -> str:
-    """Caption khi build thành công - liệt kê done items của project."""
+    """Caption khi build thành công - liệt kê task hôm nay của project (từ API)."""
     today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
     display_name = format_project_name(project)
     lines = [f"<b>{escape(display_name)} - {today}</b>"]
-    if done_items:
-        for i, item in enumerate(done_items, 1):
-            lines.append(f"{i}. {escape(item)}")
+    if tasks:
+        for i, t in enumerate(tasks, 1):
+            tp = _type_label(t.get("type"))
+            title = escape(t.get("title", "") or "")
+            lines.append(f"{i}. [{escape(tp)}] {title}")
     else:
-        lines.append("<i>Chưa có báo cáo done cho dự án này hôm nay</i>")
+        lines.append("<i>Hôm nay không có task nào cho dự án này</i>")
     return "\n".join(lines)
 
 
@@ -460,6 +444,95 @@ def topic_acl_no_restriction(topic_id: str) -> str:
 TOPIC_ACL_DENIED = "Bạn không có quyền nhắn tin trong topic này."
 
 
+# ============ TASK PREFIX MAP ============
+
+MAP_SET_SYNTAX = "<b>Cú pháp:</b> <code>/map_set &lt;PREFIX&gt; &lt;folder&gt;</code>\nVí dụ: <code>/map_set MKT-CARE mkt-care-2025</code>"
+MAP_DEL_SYNTAX = "<b>Cú pháp:</b> <code>/map_del &lt;PREFIX&gt;</code>"
+
+
+def map_set_success(prefix: str, folder: str) -> str:
+    return f"Đã map <code>{escape(prefix)}</code> → <code>{escape(folder)}</code>"
+
+
+def map_del_success(prefix: str) -> str:
+    return f"Đã xoá mapping <code>{escape(prefix)}</code>"
+
+
+def map_list(mapping: dict) -> str:
+    if not mapping:
+        return "Chưa có mapping prefix → folder. Dùng <code>/map_set</code> để thêm."
+    lines = [f"<b>Mapping prefix → folder ({len(mapping)}):</b>", ""]
+    for prefix in sorted(mapping.keys()):
+        lines.append(f"  <code>{escape(prefix)}</code> → <code>{escape(mapping[prefix])}</code>")
+    return "\n".join(lines)
+
+
+# ============ USER LINK MAP ============
+
+USER_SET_SYNTAX = "<b>Cú pháp:</b> <code>/user_set &lt;vitech_assignee_id&gt; &lt;telegram_user_id&gt;</code>"
+USER_DEL_SYNTAX = "<b>Cú pháp:</b> <code>/user_del &lt;vitech_assignee_id&gt;</code>"
+
+
+def user_set_success(assignee_id: str, tg_id: str) -> str:
+    return f"Đã link Vitech <code>{escape(assignee_id)}</code> → Telegram <code>{escape(tg_id)}</code>"
+
+
+def user_del_success(assignee_id: str) -> str:
+    return f"Đã xoá link <code>{escape(assignee_id)}</code>"
+
+
+def user_link_list(mapping: dict, members: dict) -> str:
+    if not mapping:
+        return "Chưa có user link. Dùng <code>/user_set</code> để gán."
+    lines = [f"<b>User link Vitech → Telegram ({len(mapping)}):</b>", ""]
+    for vid in sorted(mapping.keys()):
+        tg_id = mapping[vid]
+        info = members.get(tg_id, {})
+        name = escape(info.get("first_name", "") or "?")
+        lines.append(f"  <code>{escape(vid)}</code> → <code>{escape(tg_id)}</code> ({name})")
+    return "\n".join(lines)
+
+
+# ============ TASK REPORT (auto 17h) ============
+
+NO_TASKS_TODAY = "Hôm nay chưa có task nào được cập nhật."
+
+_TASK_TYPE_LABEL = {
+    "task": "task", "bug": "bug", "improvement": "cải tiến",
+    "proposal": "đề xuất", "epic": "epic", "story": "story",
+}
+
+
+def _type_label(t: str) -> str:
+    return _TASK_TYPE_LABEL.get(t, t or "task")
+
+
+def daily_task_report(grouped: dict) -> str:
+    """grouped: {PREFIX: [task_dict, ...]}, sắp xếp prefix A→Z."""
+    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
+    lines = [f"<b>{EMOJI_REPORT} Báo cáo công việc ngày {today}</b>", ""]
+    for prefix in sorted(grouped.keys()):
+        tasks = grouped[prefix]
+        lines.append(f"<b>{escape(prefix)}</b>")
+        for i, t in enumerate(tasks, 1):
+            tp = _type_label(t.get("type"))
+            title = escape(t.get("title", "") or "")
+            lines.append(f"  {i}. [{escape(tp)}] {title}")
+        lines.append("")
+    return "\n".join(lines).rstrip()
+
+
+# ============ IDLE NOTIFY ============
+
+def idle_notify(tg_user_id: str, first_name: str, web_url: str) -> str:
+    name = escape(first_name or "User")
+    return (
+        f'{EMOJI_WARNING} <a href="tg://user?id={tg_user_id}">{name}</a> '
+        f"chưa có task <b>in_progress</b> nào trong 10 phút qua.\n"
+        f"Vui lòng tạo/cập nhật task tại {escape(web_url)}"
+    )
+
+
 # ============ EDIT ============
 
 EDIT_SYNTAX = "<b>Cú pháp:</b> Reply vào tin nhắn build rồi gõ:\n<code>/edit\nNội dung mới</code>"
@@ -514,9 +587,9 @@ def _format_schedule() -> str:
 
 
 def debug_info(redis_ok: bool, topic_id, build_topic_id, log_topic_id, thread_id,
-               today: str, report_count: int, reporters: list,
                members_count: int, uptime_str: str,
-               topic_acl_info: dict | None = None) -> str:
+               topic_acl_info: dict | None = None,
+               prefix_map_count: int = 0, user_link_count: int = 0) -> str:
     redis_icon = EMOJI_CHECK if redis_ok else EMOJI_CROSS
     lines = [
         f"{EMOJI_HAMMER} <b>Debug - Thông tin hệ thống</b>",
@@ -530,23 +603,16 @@ def debug_info(redis_ok: bool, topic_id, build_topic_id, log_topic_id, thread_id
         f"  Log: <code>{log_topic_id}</code>",
         f"  Hiện tại: <code>{thread_id}</code>",
         "",
-        f"<b>Báo cáo ngày {today}:</b>",
-        f"  Đã nộp: <b>{report_count}</b> người",
-    ]
-    if reporters:
-        lines.append(f"  {', '.join(reporters)}")
-    lines += [
-        "",
-        "<b>Quyền:</b>",
+        "<b>Quyền & mapping:</b>",
         f"  Members: <b>{members_count}</b>",
+        f"  Prefix → folder: <b>{prefix_map_count}</b>",
+        f"  User link Vitech↔TG: <b>{user_link_count}</b>",
     ]
     if topic_acl_info:
         lines.append("")
         lines.append("<b>Topic ACL:</b>")
         for tid, uids in topic_acl_info.items():
             lines.append(f"  Topic <code>{tid}</code>: <b>{len(uids)}</b> user")
-    else:
-        lines.append("  Topic ACL: <i>chưa thiết lập</i>")
     lines += [
         "",
         "<b>Schedule (giờ VN):</b>",

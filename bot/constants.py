@@ -36,16 +36,17 @@ STEP_ICONS = {
 # ============ REDIS KEYS ============
 
 KEY_MEMBERS = "members"                  # Hash: user_id → {first_name, username}
-KEY_REPORT_PREFIX = "reports"            # Hash: reports:YYYY-MM-DD → user_id → report
 KEY_BUILD_COUNTER = "build:counter"      # Int: auto-increment build_id
 KEY_BUILDS_RECENT = "builds:recent"      # List: JSON của N builds gần nhất
 KEY_BUILD_ACTIVE = "build:active"        # Hash: build_id → info để cleanup khi restart
 KEY_TOPIC_ACL_PREFIX = "topic:acl"       # Set: topic:acl:{thread_id} → user_ids được phép
+KEY_TASK_PREFIX_MAP = "task_prefix_map"  # Hash: PREFIX (MKT-CARE) → folder (mkt-care-2025)
+KEY_USER_LINK_MAP = "user_link_map"      # Hash: vitech_assignee_id → telegram_user_id
+KEY_IDLE_NOTIFIED = "idle_notified"      # Hash: tg_user_id → last_notified_iso (throttle hint)
 
 
 # ============ TTL (giây) ============
 
-TTL_REPORT = 172800          # 2 ngày
 TTL_BUILDS_RECENT = 604800   # 7 ngày
 TTL_TOPIC_ACL_WARNING = 3    # Giây trước khi xóa cảnh báo ACL
 REDIS_TIMEOUT = 5
@@ -95,22 +96,18 @@ BUILD_STEPS = [
 # VN = UTC+7, nên 09:00 UTC = 16:00 VN
 
 SCHEDULE_JOBS = [
-    ("Nhắc nộp báo cáo ngày",  9, 0, "mon-fri"),   # 16:00 VN T2-T6
-    ("Nhắc nộp báo cáo ngày",  2, 0, "sat"),        # 09:00 VN T7
-    ("Nhắc nộp báo cáo tuần",  3, 0, "sat"),        # 10:00 VN T7
-    ("Nhắc chưa nộp báo cáo", 10, 0, "mon-fri"),    # 17:00 VN T2-T6
-    ("Nhắc chưa nộp báo cáo",  4, 0, "sat"),        # 11:00 VN T7
+    ("Báo cáo task hôm nay",   10, 0, "mon-fri"),   # 17:00 VN T2-T6
+    ("Nhắc báo cáo ngày",       2, 0, "sat"),        # 09:00 VN T7
+    ("Nhắc báo cáo tuần",       3, 0, "sat"),        # 10:00 VN T7
 ]
+
+# Idle check: chạy mỗi N phút (KHÔNG nằm trong cron schedule)
+IDLE_CHECK_MINUTES = 10
 
 UTC_OFFSET_VN = 7  # Dùng để tính giờ VN hiển thị
 
 
 # ============ REPORT PARSER SECTIONS ============
-
-REPORT_SECTIONS = ("done", "doing", "issue", "support", "plan")
-PROJECT_SECTIONS = ("done", "doing", "issue")  # Section thuộc về 1 project
-GLOBAL_SECTIONS = ("support", "plan")            # Section độc lập (không thuộc project)
-
 
 # ============ BOT COMMANDS ============
 # Format: (command, short_desc, long_desc, group)
@@ -118,15 +115,12 @@ GLOBAL_SECTIONS = ("support", "plan")            # Section độc lập (không 
 # - long_desc: hiện trong /help (có thể chứa HTML)
 # Phụ thuộc: LOG_TAIL_LINES → phải định nghĩa sau
 
-COMMAND_GROUPS = ["Chung", "Báo cáo", "Thành viên", "Build", "Admin"]
+COMMAND_GROUPS = ["Chung", "Thành viên", "Build", "Admin"]
 
 BOT_COMMANDS = [
     # Chung
     ("help", "Danh sách lệnh", "Hiển thị danh sách lệnh này", "Chung"),
     ("health", "Kiểm tra sức khoẻ hệ thống", "Kiểm tra sức khoẻ hệ thống", "Chung"),
-
-    # Báo cáo
-    ("export", "Xuất báo cáo hôm nay ra file", "Xuất báo cáo hôm nay ra file", "Báo cáo"),
 
     # Thành viên
     ("follow", "Đăng ký nhận thông báo", "Đăng ký nhận thông báo (tự động khi nộp báo cáo)", "Thành viên"),
@@ -163,4 +157,16 @@ BOT_COMMANDS = [
      "<code>&lt;topic_id&gt; &lt;user_id&gt;</code> Xoá quyền nhắn tin khỏi topic", "Admin"),
     ("topic_acl", "Bật/tắt ACL topic (admin)",
      "<code>&lt;topic_id&gt;</code> Bật/tắt ACL | <code>&lt;topic_id&gt; list</code> Xem phân quyền", "Admin"),
+    ("map_set", "Map PREFIX → folder build (admin)",
+     "<code>&lt;PREFIX&gt; &lt;folder&gt;</code> Map task PREFIX với folder build", "Admin"),
+    ("map_del", "Xoá map PREFIX (admin)",
+     "<code>&lt;PREFIX&gt;</code> Xoá map PREFIX", "Admin"),
+    ("map_list", "Xem mapping PREFIX → folder (admin)",
+     "Xem toàn bộ mapping PREFIX → folder", "Admin"),
+    ("user_set", "Link Vitech user → Telegram (admin)",
+     "<code>&lt;vitech_assignee_id&gt; &lt;tg_user_id&gt;</code> Link user", "Admin"),
+    ("user_del", "Xoá link user (admin)",
+     "<code>&lt;vitech_assignee_id&gt;</code> Xoá link", "Admin"),
+    ("user_list", "Xem link user (admin)",
+     "Xem toàn bộ user link Vitech ↔ Telegram", "Admin"),
 ]

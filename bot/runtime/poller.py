@@ -8,18 +8,18 @@ from bot.config import GROUP_CHAT_ID, ADMIN_USER_ID
 from bot.constants import TTL_TOPIC_ACL_WARNING
 from bot.core.store import has_topic_acl, get_topic_acl
 from bot.core.telegram import get_updates, answer_callback_query, delete_message, send_html
-from bot.commands.report import handle_report
 from bot.commands.member import handle_follow, handle_unfollow, handle_all
 from bot.commands.admin import (
     handle_debug, handle_help, handle_health, handle_members,
     handle_topic_auth, handle_topic_unauth, handle_topic_acl,
+    handle_map_set, handle_map_del, handle_map_list,
+    handle_user_set, handle_user_del, handle_user_list,
 )
 from bot.commands.build import (
     handle_build, handle_cancel, handle_queue, handle_status,
     handle_log, handle_build_history, handle_retry, handle_stats,
     handle_retry_callback, handle_edit,
 )
-from bot.commands.export import handle_export
 from bot.builder.queue import BuildQueue
 
 logger = logging.getLogger("bot.poller")
@@ -107,11 +107,16 @@ def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
         "/log":           lambda: handle_log(chat_id, thread_id, text),
         "/build_history": lambda: handle_build_history(chat_id, thread_id),
         "/stats":         lambda: handle_stats(chat_id, thread_id),
-        "/export":        lambda: handle_export(chat_id, thread_id),
         "/edit":          lambda: handle_edit(chat_id, thread_id, message_id, text, reply_to),
         "/topic_auth":    lambda: handle_topic_auth(chat_id, thread_id, user_id, text),
         "/topic_unauth":  lambda: handle_topic_unauth(chat_id, thread_id, user_id, text),
         "/topic_acl":     lambda: handle_topic_acl(chat_id, thread_id, user_id, text),
+        "/map_set":       lambda: handle_map_set(chat_id, thread_id, user_id, text),
+        "/map_del":       lambda: handle_map_del(chat_id, thread_id, user_id, text),
+        "/map_list":      lambda: handle_map_list(chat_id, thread_id, user_id),
+        "/user_set":      lambda: handle_user_set(chat_id, thread_id, user_id, text),
+        "/user_del":      lambda: handle_user_del(chat_id, thread_id, user_id, text),
+        "/user_list":     lambda: handle_user_list(chat_id, thread_id, user_id),
     }
 
     handler = handlers.get(cmd)
@@ -181,12 +186,6 @@ def handle_update(update: dict, build_queue: BuildQueue) -> None:
 
     # Topic ACL check - chặn trước khi xử lý bất kỳ thứ gì
     if not _check_topic_acl(ctx["chat_id"], ctx["thread_id"], ctx["message_id"], ctx["user_id"]):
-        return
-
-    # Report topic → handle riêng
-    if handle_report(ctx["chat_id"], ctx["message_id"], ctx["thread_id"],
-                     ctx["text"], ctx["user_id"], ctx["first_name"],
-                     ctx["username"]):
         return
 
     text = ctx["text"].strip()

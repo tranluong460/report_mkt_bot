@@ -1,15 +1,15 @@
 """Admin commands: /debug, /build_auth, /build_unauth, /help, /health."""
 
 import time
-from datetime import datetime
 from functools import wraps
 
-from bot.config import TOPIC_ID, BUILD_TOPIC_ID, LOG_TOPIC_ID, ADMIN_USER_ID, VN_TZ
-from bot.constants import DATE_FORMAT_KEY
+from bot.config import TOPIC_ID, BUILD_TOPIC_ID, LOG_TOPIC_ID, ADMIN_USER_ID
 from bot.core.store import (
-    db, get_today_reports, get_members,
+    db, get_members,
     has_topic_acl, get_topic_acl, add_topic_acl, remove_topic_acl,
     enable_topic_acl, disable_topic_acl, get_all_topic_acls,
+    get_task_prefix_map, set_task_prefix, del_task_prefix,
+    get_user_link_map, set_user_link, del_user_link,
 )
 from bot.core.telegram import send_html
 from bot import messages
@@ -45,11 +45,10 @@ def _require_admin(handler):
 @_require_admin
 def handle_debug(chat_id, thread_id, user_id):
     redis_ok = db is not None
-    reports = get_today_reports() if redis_ok else {}
-    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_KEY)
-    reporters = [r.get("name", uid) for uid, r in reports.items()]
     members = get_members()
     topic_acl_info = get_all_topic_acls()
+    prefix_map = get_task_prefix_map()
+    user_links = get_user_link_map()
 
     send_html(chat_id, messages.debug_info(
         redis_ok=redis_ok,
@@ -57,12 +56,11 @@ def handle_debug(chat_id, thread_id, user_id):
         build_topic_id=BUILD_TOPIC_ID,
         log_topic_id=LOG_TOPIC_ID,
         thread_id=thread_id,
-        today=today,
-        report_count=len(reports),
-        reporters=reporters,
         members_count=len(members),
         uptime_str=_uptime_str(),
         topic_acl_info=topic_acl_info,
+        prefix_map_count=len(prefix_map),
+        user_link_count=len(user_links),
     ), thread_id)
 
 
@@ -145,6 +143,63 @@ def handle_topic_unauth(chat_id, thread_id, user_id, text):
     target_id = parts[2]
     remove_topic_acl(topic_id, target_id)
     send_html(chat_id, messages.topic_unauth_success(topic_id, target_id), thread_id)
+
+
+# ============ TASK PREFIX MAP ============
+
+@_require_admin
+def handle_map_set(chat_id, thread_id, user_id, text):
+    parts = text.strip().split()
+    if len(parts) < 3:
+        send_html(chat_id, messages.MAP_SET_SYNTAX, thread_id)
+        return
+    prefix = parts[1].upper()
+    folder = parts[2]
+    set_task_prefix(prefix, folder)
+    send_html(chat_id, messages.map_set_success(prefix, folder), thread_id)
+
+
+@_require_admin
+def handle_map_del(chat_id, thread_id, user_id, text):
+    parts = text.strip().split()
+    if len(parts) < 2:
+        send_html(chat_id, messages.MAP_DEL_SYNTAX, thread_id)
+        return
+    prefix = parts[1].upper()
+    del_task_prefix(prefix)
+    send_html(chat_id, messages.map_del_success(prefix), thread_id)
+
+
+@_require_admin
+def handle_map_list(chat_id, thread_id, user_id):
+    send_html(chat_id, messages.map_list(get_task_prefix_map()), thread_id)
+
+
+# ============ USER LINK MAP ============
+
+@_require_admin
+def handle_user_set(chat_id, thread_id, user_id, text):
+    parts = text.strip().split()
+    if len(parts) < 3:
+        send_html(chat_id, messages.USER_SET_SYNTAX, thread_id)
+        return
+    set_user_link(parts[1], parts[2])
+    send_html(chat_id, messages.user_set_success(parts[1], parts[2]), thread_id)
+
+
+@_require_admin
+def handle_user_del(chat_id, thread_id, user_id, text):
+    parts = text.strip().split()
+    if len(parts) < 2:
+        send_html(chat_id, messages.USER_DEL_SYNTAX, thread_id)
+        return
+    del_user_link(parts[1])
+    send_html(chat_id, messages.user_del_success(parts[1]), thread_id)
+
+
+@_require_admin
+def handle_user_list(chat_id, thread_id, user_id):
+    send_html(chat_id, messages.user_link_list(get_user_link_map(), get_members()), thread_id)
 
 
 @_require_admin

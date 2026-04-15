@@ -9,7 +9,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from bot.config import validate_config, GROUP_CHAT_ID, TOPIC_ID, WEEKLY_TOPIC_ID
 from bot.core.store import db
-from bot.constants import BOT_COMMANDS, SCHEDULE_JOBS
+from bot.constants import BOT_COMMANDS, SCHEDULE_JOBS, IDLE_CHECK_MINUTES
 from bot.core.telegram import delete_webhook, send_html, set_my_commands
 from bot import messages
 from bot.runtime.startup import cleanup_orphan_builds
@@ -69,13 +69,13 @@ def send_weekly_reminder():
 
 
 def setup_scheduler() -> BackgroundScheduler:
-    from bot.runtime.scheduled import send_missing_report_alert
+    from bot.runtime.scheduled import send_daily_task_report, check_idle_users
 
     # Map label → handler function
     job_handlers = {
-        "Nhắc nộp báo cáo ngày": send_daily_reminder,
-        "Nhắc nộp báo cáo tuần": send_weekly_reminder,
-        "Nhắc chưa nộp báo cáo": send_missing_report_alert,
+        "Báo cáo task hôm nay": send_daily_task_report,
+        "Nhắc báo cáo ngày": send_daily_reminder,
+        "Nhắc báo cáo tuần": send_weekly_reminder,
     }
 
     scheduler = BackgroundScheduler(timezone="UTC")
@@ -83,6 +83,10 @@ def setup_scheduler() -> BackgroundScheduler:
         handler = job_handlers[label]
         scheduler.add_job(handler, "cron", hour=hour, minute=minute,
                           day_of_week=day_of_week, misfire_grace_time=300)
+
+    # Idle check mỗi N phút
+    scheduler.add_job(check_idle_users, "interval", minutes=IDLE_CHECK_MINUTES,
+                      misfire_grace_time=120, id="idle_check")
     return scheduler
 
 

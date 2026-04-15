@@ -7,9 +7,9 @@ from bot.config import BUILD_TOPIC_ID, BUILD_LOG_DIR
 from bot.constants import LOG_TAIL_LINES, MAX_RECENT_BUILDS, TTL_TOPIC_ACL_WARNING
 from bot.core.store import (
     next_build_id, get_recent_builds,
-    register_active_build, get_today_reports,
+    register_active_build, folder_to_prefix,
 )
-from bot.core.parser import has_today_report_for_project
+from bot.api.vitech import fetch_all_tasks, tasks_updated_today, tasks_by_prefix
 from bot.core.telegram import send_html, send_document, edit_message_media, edit_message_caption, delete_message
 from bot import messages
 from bot.builder.queue import BuildJob
@@ -106,16 +106,35 @@ def _check_build_topic(chat_id, thread_id) -> bool:
 
 
 def _check_daily_report_for_projects(chat_id, thread_id, jobs_spec: list[tuple[str, str]]) -> bool:
-    """Yêu cầu báo cáo ngày có khối dự án khớp từng project build (theo slug), không phụ thuộc user gọi lệnh."""
-    reports = get_today_reports()
+    """Yêu cầu mỗi folder build có ít nhất 1 task được cập nhật hôm nay (theo PREFIX đã map)."""
     seen: set[str] = set()
-    missing: list[str] = []
+    unmapped: list[str] = []
+    folder_prefix: dict[str, str] = {}
     for project, _branch in jobs_spec:
         if project in seen:
             continue
         seen.add(project)
-        if not has_today_report_for_project(reports, project):
-            missing.append(project)
+        prefix = folder_to_prefix(project)
+        if not prefix:
+            unmapped.append(project)
+        else:
+            folder_prefix[project] = prefix
+
+    if unmapped:
+        _send_ephemeral(chat_id, messages.build_no_prefix_mapped(unmapped), thread_id)
+        return False
+
+    # Fetch 1 lần cho mọi folder
+    try:
+        today_tasks = tasks_updated_today(fetch_all_tasks())
+    except Exception as e:
+        _send_ephemeral(chat_id, f"Lỗi gọi Vitech API: {e}", thread_id)
+        return False
+
+    missing: list[str] = []
+    for folder, prefix in folder_prefix.items():
+        if not tasks_by_prefix(today_tasks, prefix):
+            missing.append(folder)
     if missing:
         _send_ephemeral(chat_id, messages.build_no_report_projects(missing), thread_id)
         return False
@@ -250,11 +269,16 @@ def handle_retry_callback(chat_id, msg_id, build_id, user_id, first_name, build_
 
     project = target.get("project")
     branch = target.get("branch", "main")
-    reports = get_today_reports()
-    if not has_today_report_for_project(reports, project):
+    prefix = folder_to_prefix(project)
+    if not prefix:
+        return False, f"Folder {project} chưa map PREFIX, không build được."
+    try:
+        today_tasks = tasks_updated_today(fetch_all_tasks())
+    except Exception as e:
+        return False, f"Lỗi Vitech API: {e}"
+    if not tasks_by_prefix(today_tasks, prefix):
         return False, (
-            f"Chưa có báo cáo ngày cho dự án {project}, không thể build. "
-            "Cần có báo cáo hôm nay có khối dự án tương ứng."
+            f"Chưa có task hôm nay cho {project} (PREFIX {prefix}), không thể build."
         )
     thread_id = BUILD_TOPIC_ID and int(BUILD_TOPIC_ID)
 

@@ -15,10 +15,10 @@ from bot.core.telegram import (
     edit_message_reply_markup,
 )
 from bot.core.store import (
-    save_build_record, get_today_reports, get_recent_builds,
-    register_active_build, unregister_active_build,
+    save_build_record, get_recent_builds,
+    register_active_build, unregister_active_build, folder_to_prefix,
 )
-from bot.core.parser import get_project_done_items
+from bot.api.vitech import fetch_all_tasks, tasks_updated_today, tasks_by_prefix
 from bot import messages
 from bot.builder.queue import BuildQueue, BuildJob
 from bot.builder.executor import execute_build, get_dist_files, ensure_log_dir, _fmt_duration
@@ -217,12 +217,19 @@ class BuildWorker:
         dist = get_dist_files(job.project)
         logger.info(f"Build #{job.build_id} OK | zip={dist['zip']} | latest={dist['latest']}")
 
-        # Caption: done items + emoji theo duration + popularity badge
-        reports = get_today_reports()
-        done_items = get_project_done_items(reports, job.project)
+        # Caption: list task hôm nay cho project (qua API) + emoji theo duration
+        try:
+            prefix = folder_to_prefix(job.project)
+            tasks_today = (
+                tasks_by_prefix(tasks_updated_today(fetch_all_tasks()), prefix)
+                if prefix else []
+            )
+        except Exception as e:
+            logger.warning(f"Build #{job.build_id} fetch tasks failed: {e}")
+            tasks_today = []
         recent = get_recent_builds(20)
         caption = messages.build_success_caption(
-            job.project, done_items,
+            job.project, tasks_today,
             duration_seconds=result["duration"],
             recent_builds=recent,
         )

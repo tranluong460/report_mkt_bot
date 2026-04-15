@@ -2,17 +2,16 @@
 
 import json
 import logging
-from datetime import datetime
 from functools import wraps
 
 import redis
 
-from bot.config import KV_REDIS_URL, VN_TZ
+from bot.config import KV_REDIS_URL
 from bot.constants import (
-    KEY_MEMBERS, KEY_REPORT_PREFIX, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
+    KEY_MEMBERS, KEY_BUILD_COUNTER, KEY_BUILDS_RECENT,
     KEY_BUILD_ACTIVE, KEY_TOPIC_ACL_PREFIX,
-    TTL_REPORT, TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
-    DATE_FORMAT_KEY,
+    KEY_TASK_PREFIX_MAP, KEY_USER_LINK_MAP,
+    TTL_BUILDS_RECENT, MAX_RECENT_BUILDS, REDIS_TIMEOUT,
 )
 
 logger = logging.getLogger("bot.store")
@@ -40,11 +39,6 @@ def _with_redis(default):
     return decorator
 
 
-def _today_report_key() -> str:
-    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_KEY)
-    return f"{KEY_REPORT_PREFIX}:{today}"
-
-
 # ============ MEMBERS (Hash) ============
 
 @_with_redis({})
@@ -62,21 +56,6 @@ def add_member(user_id: str, first_name: str, username: str) -> None:
 @_with_redis(None)
 def remove_member(user_id: str) -> None:
     db.hdel(KEY_MEMBERS, user_id)
-
-
-# ============ REPORTS (Hash - atomic) ============
-
-@_with_redis({})
-def get_today_reports() -> dict:
-    data = db.hgetall(_today_report_key())
-    return {k.decode(): json.loads(v) for k, v in data.items()} if data else {}
-
-
-@_with_redis(None)
-def save_report(user_id: str, report: dict) -> None:
-    key = _today_report_key()
-    db.hset(key, user_id, json.dumps(report))
-    db.expire(key, TTL_REPORT)
 
 
 # ============ BUILD RECORDS (List) ============
@@ -172,6 +151,52 @@ def enable_topic_acl(thread_id) -> None:
 def disable_topic_acl(thread_id) -> None:
     """Tắt ACL cho topic (xóa key → topic mở cho tất cả)."""
     db.delete(_topic_acl_key(thread_id))
+
+
+# ============ TASK PREFIX → BUILD FOLDER (Hash) ============
+
+@_with_redis({})
+def get_task_prefix_map() -> dict:
+    """{PREFIX: folder}, ví dụ {'MKT-CARE': 'mkt-care-2025'}."""
+    data = db.hgetall(KEY_TASK_PREFIX_MAP)
+    return {k.decode(): v.decode() for k, v in data.items()} if data else {}
+
+
+@_with_redis(None)
+def set_task_prefix(prefix: str, folder: str) -> None:
+    db.hset(KEY_TASK_PREFIX_MAP, prefix.upper(), folder)
+
+
+@_with_redis(None)
+def del_task_prefix(prefix: str) -> None:
+    db.hdel(KEY_TASK_PREFIX_MAP, prefix.upper())
+
+
+def folder_to_prefix(folder: str) -> str | None:
+    """Reverse lookup: folder → PREFIX. None nếu chưa map."""
+    for prefix, fld in get_task_prefix_map().items():
+        if fld == folder:
+            return prefix
+    return None
+
+
+# ============ USER LINK: vitech assignee_id → telegram user_id (Hash) ============
+
+@_with_redis({})
+def get_user_link_map() -> dict:
+    """{vitech_assignee_id: telegram_user_id}."""
+    data = db.hgetall(KEY_USER_LINK_MAP)
+    return {k.decode(): v.decode() for k, v in data.items()} if data else {}
+
+
+@_with_redis(None)
+def set_user_link(assignee_id: str, tg_user_id: str) -> None:
+    db.hset(KEY_USER_LINK_MAP, assignee_id, tg_user_id)
+
+
+@_with_redis(None)
+def del_user_link(assignee_id: str) -> None:
+    db.hdel(KEY_USER_LINK_MAP, assignee_id)
 
 
 @_with_redis({})
