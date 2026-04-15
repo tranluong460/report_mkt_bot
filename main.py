@@ -7,11 +7,10 @@ import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from bot.config import validate_config, GROUP_CHAT_ID, TOPIC_ID, WEEKLY_TOPIC_ID
+from bot.config import validate_config
 from bot.core.store import db
 from bot.constants import BOT_COMMANDS, SCHEDULE_JOBS, IDLE_CHECK_MINUTES
-from bot.core.telegram import delete_webhook, send_html, set_my_commands
-from bot import messages
+from bot.core.telegram import delete_webhook, set_my_commands
 from bot.runtime.startup import cleanup_orphan_builds
 from bot.builder.queue import BuildQueue
 from bot.builder.worker import BuildWorker
@@ -58,24 +57,14 @@ stop_event = threading.Event()
 
 # ============ Scheduled tasks ============
 
-def send_daily_reminder():
-    logger.info("Sending daily reminder...")
-    send_html(GROUP_CHAT_ID, messages.daily_reminder(), TOPIC_ID)
-
-
-def send_weekly_reminder():
-    logger.info("Sending weekly reminder...")
-    send_html(GROUP_CHAT_ID, messages.weekly_reminder(), WEEKLY_TOPIC_ID)
-
-
 def setup_scheduler() -> BackgroundScheduler:
-    from bot.runtime.scheduled import send_daily_task_report, check_idle_users
+    from bot.runtime.scheduled import (
+        send_daily_task_report, send_weekly_task_report, check_idle_users,
+    )
 
-    # Map label → handler function
     job_handlers = {
-        "Báo cáo task hôm nay": send_daily_task_report,
-        "Nhắc báo cáo ngày": send_daily_reminder,
-        "Nhắc báo cáo tuần": send_weekly_reminder,
+        "Báo cáo task ngày": send_daily_task_report,
+        "Báo cáo task tuần": send_weekly_task_report,
     }
 
     scheduler = BackgroundScheduler(timezone="UTC")

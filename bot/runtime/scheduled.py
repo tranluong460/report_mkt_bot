@@ -2,13 +2,24 @@
 
 import logging
 
-from bot.config import GROUP_CHAT_ID, TOPIC_ID, GENERAL_TOPIC_ID, VITECH_WEB_URL
+from bot.config import GROUP_CHAT_ID, TOPIC_ID, WEEKLY_TOPIC_ID, GENERAL_TOPIC_ID, VITECH_WEB_URL
 from bot.core.store import get_user_link_map, get_members
 from bot.core.telegram import send_html
 from bot.api.vitech import (
-    fetch_all_tasks, tasks_updated_today, task_prefix, within_last_minutes,
+    fetch_all_tasks, tasks_updated_today, tasks_updated_this_week,
+    task_prefix, within_last_minutes,
 )
 from bot import messages
+
+
+def _group_by_prefix(tasks: list) -> dict:
+    grouped: dict[str, list] = {}
+    for t in tasks:
+        prefix = task_prefix(t.get("code", ""))
+        if not prefix:
+            continue
+        grouped.setdefault(prefix, []).append(t)
+    return grouped
 
 logger = logging.getLogger("bot.scheduled")
 
@@ -16,7 +27,7 @@ logger = logging.getLogger("bot.scheduled")
 # ============ 17h: Báo cáo tự động theo task hôm nay ============
 
 def send_daily_task_report():
-    """Gửi báo cáo các task được cập nhật hôm nay vào Report topic, nhóm theo PREFIX."""
+    """Báo cáo task hôm nay → topic_daily. Nhóm theo PREFIX."""
     try:
         tasks = tasks_updated_today(fetch_all_tasks())
     except Exception as e:
@@ -27,15 +38,26 @@ def send_daily_task_report():
         send_html(GROUP_CHAT_ID, messages.NO_TASKS_TODAY, TOPIC_ID)
         return
 
-    grouped: dict[str, list] = {}
-    for t in tasks:
-        prefix = task_prefix(t.get("code", ""))
-        if not prefix:
-            continue
-        grouped.setdefault(prefix, []).append(t)
-
+    grouped = _group_by_prefix(tasks)
     logger.info(f"Daily task report: {len(tasks)} tasks, {len(grouped)} groups")
     send_html(GROUP_CHAT_ID, messages.daily_task_report(grouped), TOPIC_ID)
+
+
+def send_weekly_task_report():
+    """Báo cáo task cả tuần (T2→T7) → topic_weekly. Nhóm theo PREFIX."""
+    try:
+        tasks = tasks_updated_this_week(fetch_all_tasks())
+    except Exception as e:
+        logger.error(f"Weekly task report fetch failed: {e}")
+        return
+
+    if not tasks:
+        send_html(GROUP_CHAT_ID, messages.NO_TASKS_TODAY, WEEKLY_TOPIC_ID)
+        return
+
+    grouped = _group_by_prefix(tasks)
+    logger.info(f"Weekly task report: {len(tasks)} tasks, {len(grouped)} groups")
+    send_html(GROUP_CHAT_ID, messages.weekly_task_report(grouped), WEEKLY_TOPIC_ID)
 
 
 # ============ Mỗi 10p: nhắc user không có task in_progress ============

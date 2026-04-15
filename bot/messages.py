@@ -44,29 +44,6 @@ def duration_emoji(seconds: float) -> str:
     return EMOJI_CHECK
 
 
-# ============ NHẮC NHỞ ============
-
-def daily_reminder() -> str:
-    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
-    return (
-        f"<b>{EMOJI_REPORT} Nhắc báo cáo ngày {today}</b>\n\n"
-        "Mọi người gửi báo cáo công việc hôm nay vào topic này nhé!"
-    )
-
-
-def weekly_reminder() -> str:
-    today = datetime.now(VN_TZ)
-    monday = today - timedelta(days=today.weekday())
-    saturday = monday + timedelta(days=5)
-    return (
-        f"<b>{EMOJI_REPORT} Nhắc báo cáo tuần "
-        f"{monday.strftime(DATE_FORMAT_DISPLAY)} - {saturday.strftime(DATE_FORMAT_DISPLAY)}</b>\n\n"
-        "Mọi người gửi báo cáo công việc hôm nay vào topic này nhé!"
-    )
-
-
-# ============ REPORT ============
-
 # ============ MEMBER ============
 
 def follow_success(first_name: str) -> str:
@@ -507,10 +484,8 @@ def _type_label(t: str) -> str:
     return _TASK_TYPE_LABEL.get(t, t or "task")
 
 
-def daily_task_report(grouped: dict) -> str:
-    """grouped: {PREFIX: [task_dict, ...]}, sắp xếp prefix A→Z."""
-    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
-    lines = [f"<b>{EMOJI_REPORT} Báo cáo công việc ngày {today}</b>", ""]
+def _format_grouped_tasks(grouped: dict, header: str) -> str:
+    lines = [header, ""]
     for prefix in sorted(grouped.keys()):
         tasks = grouped[prefix]
         lines.append(f"<b>{escape(prefix)}</b>")
@@ -520,6 +495,26 @@ def daily_task_report(grouped: dict) -> str:
             lines.append(f"  {i}. [{escape(tp)}] {title}")
         lines.append("")
     return "\n".join(lines).rstrip()
+
+
+def daily_task_report(grouped: dict) -> str:
+    """grouped: {PREFIX: [task_dict, ...]}."""
+    today = datetime.now(VN_TZ).strftime(DATE_FORMAT_DISPLAY)
+    return _format_grouped_tasks(
+        grouped, f"<b>{EMOJI_REPORT} Báo cáo công việc ngày {today}</b>",
+    )
+
+
+def weekly_task_report(grouped: dict) -> str:
+    """grouped: {PREFIX: [task_dict, ...]} cho cả tuần T2→T7."""
+    today = datetime.now(VN_TZ)
+    monday = today - timedelta(days=today.weekday())
+    saturday = monday + timedelta(days=5)
+    header = (
+        f"<b>{EMOJI_REPORT} Báo cáo tuần "
+        f"{monday.strftime(DATE_FORMAT_DISPLAY)} - {saturday.strftime(DATE_FORMAT_DISPLAY)}</b>"
+    )
+    return _format_grouped_tasks(grouped, header)
 
 
 # ============ IDLE NOTIFY ============

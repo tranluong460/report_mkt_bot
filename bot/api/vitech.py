@@ -139,6 +139,22 @@ def tasks_updated_today(tasks: list[dict]) -> list[dict]:
     return [t for t in tasks if is_today_vn(t.get("updatedAt"))]
 
 
+def is_in_current_week_vn(ts: str) -> bool:
+    """True nếu timestamp UTC thuộc tuần hiện tại theo giờ VN (T2 → T7)."""
+    dt = parse_utc(ts)
+    if not dt:
+        return False
+    today_vn = datetime.now(VN_TZ).date()
+    monday = today_vn - timedelta(days=today_vn.weekday())
+    saturday = monday + timedelta(days=5)
+    d = dt.astimezone(VN_TZ).date()
+    return monday <= d <= saturday
+
+
+def tasks_updated_this_week(tasks: list[dict]) -> list[dict]:
+    return [t for t in tasks if is_in_current_week_vn(t.get("updatedAt"))]
+
+
 def tasks_by_prefix(tasks: list[dict], prefix: str) -> list[dict]:
     """Lọc tasks có code bắt đầu bằng PREFIX-."""
     p = f"{prefix.upper()}-"

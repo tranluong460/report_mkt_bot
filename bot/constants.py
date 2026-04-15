@@ -96,9 +96,9 @@ BUILD_STEPS = [
 # VN = UTC+7, nên 09:00 UTC = 16:00 VN
 
 SCHEDULE_JOBS = [
-    ("Báo cáo task hôm nay",   10, 0, "mon-fri"),   # 17:00 VN T2-T6
-    ("Nhắc báo cáo ngày",       2, 0, "sat"),        # 09:00 VN T7
-    ("Nhắc báo cáo tuần",       3, 0, "sat"),        # 10:00 VN T7
+    ("Báo cáo task ngày",   10, 0, "mon-fri"),   # 17:00 VN T2-T6
+    ("Báo cáo task ngày",    2, 0, "sat"),        # 09:00 VN T7
+    ("Báo cáo task tuần",    3, 0, "sat"),        # 10:00 VN T7
 ]
 
 # Idle check: chạy mỗi N phút (KHÔNG nằm trong cron schedule)
