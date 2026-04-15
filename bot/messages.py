@@ -581,58 +581,57 @@ def _format_schedule() -> str:
     return "\n".join(lines)
 
 
-def debug_info(redis_ok: bool, topic_id, build_topic_id, log_topic_id, thread_id,
+def debug_info(redis_ok: bool, topics: dict, thread_id,
                members_count: int, uptime_str: str,
                topic_acl_info: dict | None = None,
-               prefix_map_count: int = 0, user_link_count: int = 0) -> str:
+               prefix_map: dict | None = None,
+               user_links: dict | None = None,
+               running_count: int = 0, pending_count: int = 0) -> str:
     redis_icon = EMOJI_CHECK if redis_ok else EMOJI_CROSS
+    prefix_map = prefix_map or {}
+    user_links = user_links or {}
+
     lines = [
-        f"{EMOJI_HAMMER} <b>Debug - Thông tin hệ thống</b>",
+        f"{EMOJI_HAMMER} <b>Debug - Trạng thái hệ thống</b>",
         "",
         "<b>Kết nối:</b>",
         f"  {redis_icon} Redis: {'OK' if redis_ok else 'DOWN'}",
+        f"  \u23f1 Uptime: <b>{uptime_str}</b>",
+        "",
+        "<b>Build worker:</b>",
+        f"  {EMOJI_ROCKET} Đang chạy: <b>{running_count}</b>",
+        f"  {EMOJI_HOURGLASS} Queue: <b>{pending_count}</b>",
         "",
         "<b>Topics:</b>",
-        f"  Report: <code>{topic_id}</code>",
-        f"  Build: <code>{build_topic_id}</code>",
-        f"  Log: <code>{log_topic_id}</code>",
-        f"  Hiện tại: <code>{thread_id}</code>",
-        "",
-        "<b>Quyền & mapping:</b>",
-        f"  Members: <b>{members_count}</b>",
-        f"  Prefix → folder: <b>{prefix_map_count}</b>",
-        f"  User link Vitech↔TG: <b>{user_link_count}</b>",
     ]
+    for label, tid in topics.items():
+        lines.append(f"  {label}: <code>{tid}</code>")
+    lines.append(f"  Hiện tại: <code>{thread_id}</code>")
+
+    lines += [
+        "",
+        f"<b>Members ({members_count}):</b> dùng /members để xem chi tiết",
+        "",
+        f"<b>Mapping PREFIX → folder ({len(prefix_map)}):</b>",
+    ]
+    if prefix_map:
+        for prefix in sorted(prefix_map.keys()):
+            lines.append(f"  <code>{escape(prefix)}</code> → <code>{escape(prefix_map[prefix])}</code>")
+    else:
+        lines.append("  <i>chưa có</i>")
+
+    lines.append("")
+    lines.append(f"<b>User link Vitech ↔ Telegram ({len(user_links)}):</b> dùng /user_list để xem")
+
     if topic_acl_info:
         lines.append("")
         lines.append("<b>Topic ACL:</b>")
         for tid, uids in topic_acl_info.items():
             lines.append(f"  Topic <code>{tid}</code>: <b>{len(uids)}</b> user")
+
     lines += [
         "",
         "<b>Schedule (giờ VN):</b>",
         _format_schedule(),
-        "",
-        f"\u23f1 Uptime: <b>{uptime_str}</b>",
-    ]
-    return "\n".join(lines)
-
-
-def health_status(redis_ok: bool, members_count: int, running_count: int,
-                  pending_count: int, uptime_str: str) -> str:
-    redis_icon = EMOJI_CHECK if redis_ok else EMOJI_CROSS
-    lines = [
-        f"{EMOJI_HAMMER} <b>Health Check</b>",
-        "",
-        "<b>Kết nối:</b>",
-        f"  {redis_icon} Redis: {'OK' if redis_ok else 'DOWN'}",
-        "",
-        "<b>Build:</b>",
-        f"  {EMOJI_ROCKET} Workers: <b>{running_count}</b> đang chạy",
-        f"  {EMOJI_HOURGLASS} Queue: <b>{pending_count}</b> pending",
-        "",
-        "<b>Thông tin:</b>",
-        f"  \U0001f465 Members: <b>{members_count}</b>",
-        f"  \u23f1 Uptime: <b>{uptime_str}</b>",
     ]
     return "\n".join(lines)

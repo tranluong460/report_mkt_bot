@@ -10,7 +10,7 @@ from bot.core.store import has_topic_acl, get_topic_acl
 from bot.core.telegram import get_updates, answer_callback_query, delete_message, send_html
 from bot.commands.member import handle_follow, handle_unfollow, handle_all
 from bot.commands.admin import (
-    handle_debug, handle_help, handle_health, handle_members,
+    handle_debug, handle_help, handle_members,
     handle_topic_auth, handle_topic_unauth, handle_topic_acl,
     handle_map_set, handle_map_del, handle_map_list,
     handle_user_set, handle_user_del, handle_user_list,
@@ -93,8 +93,7 @@ def _dispatch_command(cmd: str, ctx: dict, build_queue: BuildQueue) -> bool:
 
     handlers = {
         "/help":          lambda: handle_help(chat_id, thread_id),
-        "/health":        lambda: handle_health(chat_id, thread_id, build_queue),
-        "/debug":         lambda: handle_debug(chat_id, thread_id, user_id),
+        "/debug":         lambda: handle_debug(chat_id, thread_id, user_id, build_queue),
         "/members":       lambda: handle_members(chat_id, thread_id, user_id),
         "/follow":        lambda: handle_follow(chat_id, thread_id, user_id, first_name, username),
         "/unfollow":      lambda: handle_unfollow(chat_id, thread_id, user_id, first_name),

@@ -120,10 +120,10 @@ COMMAND_GROUPS = ["Chung", "Thành viên", "Build", "Admin"]
 BOT_COMMANDS = [
     # Chung
     ("help", "Danh sách lệnh", "Hiển thị danh sách lệnh này", "Chung"),
-    ("health", "Kiểm tra sức khoẻ hệ thống", "Kiểm tra sức khoẻ hệ thống", "Chung"),
 
     # Thành viên
-    ("follow", "Đăng ký nhận thông báo", "Đăng ký nhận thông báo (tự động khi nộp báo cáo)", "Thành viên"),
+    ("follow", "Đăng ký nhận thông báo",
+     "Đăng ký nhận thông báo (broadcast /all + tag idle)", "Thành viên"),
     ("unfollow", "Huỷ đăng ký thông báo", "Huỷ đăng ký", "Thành viên"),
     ("all", "Gửi thông báo tới tất cả",
      "<code>&lt;nội dung&gt;</code> Gửi thông báo tới tất cả người đã follow", "Thành viên"),
@@ -148,7 +148,7 @@ BOT_COMMANDS = [
 
     # Admin
     ("debug", "Trạng thái hệ thống (admin)",
-     "Trạng thái hệ thống (Redis, reports, quyền)", "Admin"),
+     "Trạng thái hệ thống chi tiết (Redis, worker, queue, topics, mapping, ACL, schedule)", "Admin"),
     ("members", "Danh sách thành viên (admin)",
      "Hiển thị tất cả thành viên: ID, tên, username", "Admin"),
     ("topic_auth", "Cấp quyền nhắn tin topic (admin)",

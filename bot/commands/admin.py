@@ -1,9 +1,12 @@
-"""Admin commands: /debug, /build_auth, /build_unauth, /help, /health."""
+"""Admin commands: /debug, /help, /members, mapping CRUD, topic ACL."""
 
 import time
 from functools import wraps
 
-from bot.config import TOPIC_ID, BUILD_TOPIC_ID, LOG_TOPIC_ID, ADMIN_USER_ID
+from bot.config import (
+    TOPIC_ID, WEEKLY_TOPIC_ID, BUILD_TOPIC_ID, LOG_TOPIC_ID, GENERAL_TOPIC_ID,
+    ADMIN_USER_ID,
+)
 from bot.core.store import (
     db, get_members,
     has_topic_acl, get_topic_acl, add_topic_acl, remove_topic_acl,
@@ -43,24 +46,37 @@ def _require_admin(handler):
 # ============ /debug ============
 
 @_require_admin
-def handle_debug(chat_id, thread_id, user_id):
-    redis_ok = db is not None
+def handle_debug(chat_id, thread_id, user_id, build_queue=None):
+    redis_ok = False
+    if db is not None:
+        try:
+            db.ping()
+            redis_ok = True
+        except Exception:
+            redis_ok = False
+
     members = get_members()
     topic_acl_info = get_all_topic_acls()
     prefix_map = get_task_prefix_map()
     user_links = get_user_link_map()
 
+    queue_status = build_queue.get_status() if build_queue else {"running": [], "pending": []}
+
     send_html(chat_id, messages.debug_info(
         redis_ok=redis_ok,
-        topic_id=TOPIC_ID,
-        build_topic_id=BUILD_TOPIC_ID,
-        log_topic_id=LOG_TOPIC_ID,
+        topics={
+            "Daily": TOPIC_ID, "Weekly": WEEKLY_TOPIC_ID,
+            "Build": BUILD_TOPIC_ID, "Log": LOG_TOPIC_ID,
+            "General": GENERAL_TOPIC_ID,
+        },
         thread_id=thread_id,
         members_count=len(members),
         uptime_str=_uptime_str(),
         topic_acl_info=topic_acl_info,
-        prefix_map_count=len(prefix_map),
-        user_link_count=len(user_links),
+        prefix_map=prefix_map,
+        user_links=user_links,
+        running_count=len(queue_status["running"]),
+        pending_count=len(queue_status["pending"]),
     ), thread_id)
 
 
@@ -79,29 +95,6 @@ def handle_members(chat_id, thread_id, user_id):
 
 def handle_help(chat_id, thread_id):
     send_html(chat_id, messages.HELP_TEXT, thread_id)
-
-
-# ============ /health ============
-
-def handle_health(chat_id, thread_id, build_queue):
-    redis_ok = False
-    if db is not None:
-        try:
-            db.ping()
-            redis_ok = True
-        except Exception:
-            redis_ok = False
-
-    members_count = len(get_members())
-    status = build_queue.get_status()
-
-    send_html(chat_id, messages.health_status(
-        redis_ok=redis_ok,
-        members_count=members_count,
-        running_count=len(status["running"]),
-        pending_count=len(status["pending"]),
-        uptime_str=_uptime_str(),
-    ), thread_id)
 
 
 # ============ TOPIC ACL ============
